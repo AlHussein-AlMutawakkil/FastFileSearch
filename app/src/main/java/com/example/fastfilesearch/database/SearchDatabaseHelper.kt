@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteStatement
 import android.util.Log
 import com.example.fastfilesearch.model.FileSegment
 import com.example.fastfilesearch.model.IndexedFileRecord
+import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchMethod
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.util.ArabicNormalizer
 
@@ -443,81 +445,61 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
     }
 
     /**
-     * Executes FTS search using normalized query terms.
-     * Uses BM25 ranking when FTS5 is active, or standard FTS matching when FTS4 is active.
+     * Executes search using specified SearchFilter and ranking.
+     * Supports CONTAINS (middle of word via instr), ALL_WORDS, EXACT_PHRASE, and WHOLE_WORD.
      * Enriches results with sheet headers from sheet_headers table and extracts sheetName and rowNumber.
      */
-    fun search(rawQuery: String, limit: Int = 150): List<SearchResult> {
-        val normalizedQuery = ArabicNormalizer.normalize(rawQuery)
+    fun search(
+        rawQuery: String,
+        filter: SearchFilter = SearchFilter(),
+        limit: Int = 150
+    ): List<SearchResult> {
+        val normalizedQuery = ArabicNormalizer.normalize(rawQuery).trim()
         if (normalizedQuery.isBlank()) return emptyList()
 
-        // Clean tokens from any punctuation to guarantee valid FTS query syntax
+        // Clean tokens from any punctuation
         val tokens = normalizedQuery.split("[^\\p{L}\\p{Nd}]+".toRegex()).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
         val db = readableDatabase
         val fts5 = checkIsFts5(db)
 
-        val matchExpr = if (fts5) {
-            tokens.joinToString(" ") { "\"$it\"*" }
-        } else {
-            tokens.joinToString(" ") { "$it*" }
+        // Build fileUri and extension filter clauses
+        val additionalWhere = mutableListOf<String>()
+        val additionalArgs = mutableListOf<String>()
+
+        if (filter.selectedFileUris.isNotEmpty()) {
+            val placeholders = filter.selectedFileUris.joinToString(",") { "?" }
+            additionalWhere.add("$FTS_COL_URI IN ($placeholders)")
+            additionalArgs.addAll(filter.selectedFileUris)
         }
 
-        val sql = if (fts5) {
-            """
-            SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
-            FROM $TABLE_FTS
-            WHERE $TABLE_FTS MATCH ?
-            ORDER BY bm25($TABLE_FTS)
-            LIMIT ?
-            """.trimIndent()
-        } else {
-            """
-            SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
-            FROM $TABLE_FTS
-            WHERE $TABLE_FTS MATCH ?
-            LIMIT ?
-            """.trimIndent()
-        }
-
-        val hits = mutableListOf<SearchHit>()
-        try {
-            val cursor = db.rawQuery(sql, arrayOf(matchExpr, limit.toString()))
-            cursor.use {
-                val idIdx = it.getColumnIndexOrThrow("rowid")
-                val uriIdx = it.getColumnIndexOrThrow(FTS_COL_URI)
-                val nameIdx = it.getColumnIndexOrThrow(FTS_COL_NAME)
-                val locIdx = it.getColumnIndexOrThrow(FTS_COL_LOCATION)
-                val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
-
-                while (it.moveToNext()) {
-                    hits.add(
-                        SearchHit(
-                            id = it.getLong(idIdx),
-                            fileUri = it.getString(uriIdx),
-                            fileName = it.getString(nameIdx),
-                            location = it.getString(locIdx),
-                            content = it.getString(contentIdx)
-                        )
-                    )
-                }
+        if (filter.selectedExtensions.isNotEmpty()) {
+            val extConditions = filter.selectedExtensions.joinToString(" OR ") {
+                "$FTS_COL_NAME LIKE ?"
             }
-            return enrichSearchResults(db, hits, rawQuery)
-        } catch (e: Exception) {
-            Log.w(TAG, "Primary FTS query failed for expr [$matchExpr], trying simple token match", e)
-            try {
-                // Fallback: simple bare token without asterisk
-                val fallbackExpr = tokens.joinToString(" ")
-                val fallbackSql = """
-                    SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
-                    FROM $TABLE_FTS
-                    WHERE $TABLE_FTS MATCH ?
-                    LIMIT ?
-                """.trimIndent()
+            additionalWhere.add("($extConditions)")
+            filter.selectedExtensions.forEach { ext ->
+                additionalArgs.add("%.$ext")
+            }
+        }
 
-                val fallbackHits = mutableListOf<SearchHit>()
-                val cursor = db.rawQuery(fallbackSql, arrayOf(fallbackExpr, limit.toString()))
+        val rawHits = mutableListOf<SearchHit>()
+
+        if (filter.method == SearchMethod.CONTAINS) {
+            // Requirement 3: CONTAINS matches text even inside middle of words (instr on normalized content)
+            val instrConditions = tokens.map { "instr($FTS_COL_NORMALIZED, ?) > 0" }
+            val allWhereClauses = (instrConditions + additionalWhere).joinToString(" AND ")
+            val sql = """
+                SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
+                FROM $TABLE_FTS
+                WHERE $allWhereClauses
+                LIMIT ?
+            """.trimIndent()
+            val queryArgs = (tokens + additionalArgs + listOf(limit.toString())).toTypedArray()
+
+            try {
+                val cursor = db.rawQuery(sql, queryArgs)
                 cursor.use {
                     val idIdx = it.getColumnIndexOrThrow("rowid")
                     val uriIdx = it.getColumnIndexOrThrow(FTS_COL_URI)
@@ -526,7 +508,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
                     val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
 
                     while (it.moveToNext()) {
-                        fallbackHits.add(
+                        rawHits.add(
                             SearchHit(
                                 id = it.getLong(idIdx),
                                 fileUri = it.getString(uriIdx),
@@ -537,13 +519,148 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
                         )
                     }
                 }
-                return enrichSearchResults(db, fallbackHits, rawQuery)
-            } catch (fallbackEx: Exception) {
-                Log.e(TAG, "Search fallback failed", fallbackEx)
+            } catch (e: Exception) {
+                Log.e(TAG, "CONTAINS query failed", e)
+            }
+        } else {
+            // FTS-based search: ALL_WORDS, EXACT_PHRASE, WHOLE_WORD
+            val matchExpr = when (filter.method) {
+                SearchMethod.EXACT_PHRASE -> {
+                    if (fts5) "\"${tokens.joinToString(" ")}\"" else "\"${tokens.joinToString(" ")}\""
+                }
+                SearchMethod.WHOLE_WORD -> {
+                    if (fts5) tokens.joinToString(" ") { "\"$it\"" } else tokens.joinToString(" ") { it }
+                }
+                SearchMethod.ALL_WORDS, SearchMethod.CONTAINS -> {
+                    if (fts5) tokens.joinToString(" ") { "\"$it\"*" } else tokens.joinToString(" ") { "$it*" }
+                }
+            }
+
+            val ftsWhereClauses = mutableListOf<String>()
+            val ftsArgs = mutableListOf<String>()
+
+            ftsWhereClauses.add("$TABLE_FTS MATCH ?")
+            ftsArgs.add(matchExpr)
+
+            ftsWhereClauses.addAll(additionalWhere)
+            ftsArgs.addAll(additionalArgs)
+
+            val whereClause = ftsWhereClauses.joinToString(" AND ")
+            val orderClause = if (fts5) "ORDER BY bm25($TABLE_FTS)" else ""
+
+            val sql = """
+                SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
+                FROM $TABLE_FTS
+                WHERE $whereClause
+                $orderClause
+                LIMIT ?
+            """.trimIndent()
+
+            ftsArgs.add(limit.toString())
+
+            try {
+                val cursor = db.rawQuery(sql, ftsArgs.toTypedArray())
+                cursor.use {
+                    val idIdx = it.getColumnIndexOrThrow("rowid")
+                    val uriIdx = it.getColumnIndexOrThrow(FTS_COL_URI)
+                    val nameIdx = it.getColumnIndexOrThrow(FTS_COL_NAME)
+                    val locIdx = it.getColumnIndexOrThrow(FTS_COL_LOCATION)
+                    val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
+
+                    while (it.moveToNext()) {
+                        rawHits.add(
+                            SearchHit(
+                                id = it.getLong(idIdx),
+                                fileUri = it.getString(uriIdx),
+                                fileName = it.getString(nameIdx),
+                                location = it.getString(locIdx),
+                                content = it.getString(contentIdx)
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Primary FTS query failed for expr [$matchExpr], trying simple token match", e)
+                try {
+                    val fallbackExpr = tokens.joinToString(" ")
+                    val fallbackWhere = (listOf("$TABLE_FTS MATCH ?") + additionalWhere).joinToString(" AND ")
+                    val fallbackArgs = (listOf(fallbackExpr) + additionalArgs + listOf(limit.toString())).toTypedArray()
+                    val fallbackSql = """
+                        SELECT rowid, $FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT
+                        FROM $TABLE_FTS
+                        WHERE $fallbackWhere
+                        LIMIT ?
+                    """.trimIndent()
+
+                    val cursor = db.rawQuery(fallbackSql, fallbackArgs)
+                    cursor.use {
+                        val idIdx = it.getColumnIndexOrThrow("rowid")
+                        val uriIdx = it.getColumnIndexOrThrow(FTS_COL_URI)
+                        val nameIdx = it.getColumnIndexOrThrow(FTS_COL_NAME)
+                        val locIdx = it.getColumnIndexOrThrow(FTS_COL_LOCATION)
+                        val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
+
+                        while (it.moveToNext()) {
+                            rawHits.add(
+                                SearchHit(
+                                    id = it.getLong(idIdx),
+                                    fileUri = it.getString(uriIdx),
+                                    fileName = it.getString(nameIdx),
+                                    location = it.getString(locIdx),
+                                    content = it.getString(contentIdx)
+                                )
+                            )
+                        }
+                    }
+                } catch (fallbackEx: Exception) {
+                    Log.e(TAG, "Search fallback failed", fallbackEx)
+                }
             }
         }
 
-        return emptyList()
+        // Post-filtering for exact phrase and whole word boundaries
+        var processedHits: List<SearchHit> = rawHits
+
+        if (filter.method == SearchMethod.EXACT_PHRASE) {
+            processedHits = processedHits.filter { hit ->
+                val normContent = ArabicNormalizer.normalize(hit.content)
+                val normName = ArabicNormalizer.normalize(hit.fileName)
+                normContent.contains(normalizedQuery) || normName.contains(normalizedQuery)
+            }
+        } else if (filter.method == SearchMethod.WHOLE_WORD) {
+            processedHits = processedHits.filter { hit ->
+                val normContent = ArabicNormalizer.normalize(hit.content)
+                val normName = ArabicNormalizer.normalize(hit.fileName)
+                tokens.all { token ->
+                    val regex = Regex("(?<![\\p{L}\\p{Nd}])${Regex.escape(token)}(?![\\p{L}\\p{Nd}])")
+                    regex.containsMatchIn(normContent) || regex.containsMatchIn(normName)
+                }
+            }
+        }
+
+        // Requirement 3: When ignoreDiacritics is false, perform exact literal match on raw snippet content
+        if (!filter.ignoreDiacritics) {
+            val rawTrimmed = rawQuery.trim()
+            val rawTokens = rawTrimmed.split("[^\\p{L}\\p{Nd}]+".toRegex()).filter { it.isNotBlank() }
+            processedHits = processedHits.filter { hit ->
+                when (filter.method) {
+                    SearchMethod.EXACT_PHRASE -> {
+                        hit.content.contains(rawTrimmed) || hit.fileName.contains(rawTrimmed)
+                    }
+                    SearchMethod.WHOLE_WORD -> {
+                        rawTokens.all { token ->
+                            val regex = Regex("(?<![\\p{L}\\p{Nd}])${Regex.escape(token)}(?![\\p{L}\\p{Nd}])")
+                            regex.containsMatchIn(hit.content) || regex.containsMatchIn(hit.fileName)
+                        }
+                    }
+                    SearchMethod.CONTAINS, SearchMethod.ALL_WORDS -> {
+                        rawTokens.all { hit.content.contains(it) || hit.fileName.contains(it) }
+                    }
+                }
+            }
+        }
+
+        return enrichSearchResults(db, processedHits, rawQuery)
     }
 
     /**

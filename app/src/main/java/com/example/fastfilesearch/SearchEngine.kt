@@ -10,6 +10,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.example.fastfilesearch.database.SearchDatabaseHelper
 import com.example.fastfilesearch.model.FileSegment
 import com.example.fastfilesearch.model.IndexedFileRecord
+import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.parser.FileParserDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -390,11 +391,21 @@ class SearchEngine(private val context: Context) {
     }
 
     /**
-     * Executes instant FTS search.
+     * Executes instant FTS search with filter options.
      */
-    suspend fun search(query: String): List<SearchResult> = withContext(Dispatchers.IO) {
+    suspend fun search(
+        query: String,
+        filter: SearchFilter = SearchFilter()
+    ): List<SearchResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()
-        dbHelper.search(query)
+        dbHelper.search(query, filter)
+    }
+
+    /**
+     * Returns all currently indexed files.
+     */
+    fun getAllIndexedFiles(): List<IndexedFileRecord> {
+        return dbHelper.getAllIndexedFiles().values.toList()
     }
 
     /**

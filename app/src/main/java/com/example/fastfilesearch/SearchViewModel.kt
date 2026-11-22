@@ -4,6 +4,8 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fastfilesearch.model.IndexedFileRecord
+import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -31,7 +33,9 @@ data class SearchUiState(
     val showAllRows: Boolean = true,
     val verticalCopyFormat: Boolean = true,
     val expandFullCellText: Boolean = true,
-    val appTheme: String = "system"
+    val appTheme: String = "system",
+    val searchFilter: SearchFilter = SearchFilter(),
+    val indexedFiles: List<IndexedFileRecord> = emptyList()
 )
 
 @OptIn(FlowPreview::class)
@@ -70,10 +74,12 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         // Query database stats asynchronously on IO dispatcher to avoid Main Thread blocking
         viewModelScope.launch(Dispatchers.IO) {
             val stats = searchEngine.getIndexStats()
+            val allFiles = searchEngine.getAllIndexedFiles()
             _uiState.update {
                 it.copy(
                     filesCount = stats.first,
-                    segmentsCount = stats.second
+                    segmentsCount = stats.second,
+                    indexedFiles = allFiles
                 )
             }
         }
@@ -146,7 +152,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
         searchJob = viewModelScope.launch {
             try {
-                val results = searchEngine.search(query)
+                val results = searchEngine.search(query, _uiState.value.searchFilter)
                 _uiState.update {
                     it.copy(
                         searchResults = results,
@@ -178,6 +184,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
 
                 val stats = searchEngine.getIndexStats()
+                val allFiles = searchEngine.getAllIndexedFiles()
                 val message = when {
                     summary.indexedCount > 0 ->
                         "اكتملت الفهرسة: تم تحديث ${summary.indexedCount} ملف، وتخطي ${summary.skippedCount} ملف دون تغيير."
@@ -191,6 +198,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     it.copy(
                         filesCount = stats.first,
                         segmentsCount = stats.second,
+                        indexedFiles = allFiles,
                         userMessage = message
                     )
                 }
@@ -244,6 +252,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun onSetAppTheme(theme: String) {
         searchEngine.setAppTheme(theme)
         _uiState.update { it.copy(appTheme = theme) }
+    }
+
+    fun onFilterChanged(newFilter: SearchFilter) {
+        _uiState.update { it.copy(searchFilter = newFilter) }
+        val currentQuery = _uiState.value.searchQuery
+        if (currentQuery.isNotBlank()) {
+            executeSearch(currentQuery)
+        }
+    }
+
+    fun onResetFilter() {
+        onFilterChanged(SearchFilter())
     }
 
     fun onDismissMessage() {

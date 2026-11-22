@@ -18,13 +18,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -35,8 +40,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -53,18 +56,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
+import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
 import com.example.fastfilesearch.ui.components.FileResultGroup
+import com.example.fastfilesearch.ui.components.FilterSheet
 import com.example.fastfilesearch.ui.components.NoResultsPrompt
 import com.example.fastfilesearch.ui.components.OfficialExcelTableCard
 import com.example.fastfilesearch.ui.components.ReadyToSearchPrompt
@@ -82,6 +89,7 @@ fun SearchScreen(
     onClearQuery: () -> Unit,
     onOpenFile: (String) -> Unit,
     onDismissMessage: () -> Unit,
+    onFilterChanged: (SearchFilter) -> Unit = {},
     onToggleStretchSingleColumn: (Boolean) -> Unit = {},
     onToggleShowAllRows: (Boolean) -> Unit = {},
     onToggleVerticalCopyFormat: (Boolean) -> Unit = {},
@@ -93,6 +101,7 @@ fun SearchScreen(
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showFilterSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -136,6 +145,21 @@ fun SearchScreen(
                 onToggleExpandFullCellText = onToggleExpandFullCellText,
                 onSetAppTheme = onSetAppTheme,
                 onDismiss = { showSettingsDialog = false }
+            )
+        }
+
+        // Monochromatic Filter Bottom Sheet
+        if (showFilterSheet) {
+            FilterSheet(
+                uiState = uiState,
+                isDark = isDark,
+                onApply = { newFilter ->
+                    onFilterChanged(newFilter)
+                    showFilterSheet = false
+                },
+                onDismiss = {
+                    showFilterSheet = false
+                }
             )
         }
 
@@ -256,50 +280,105 @@ fun SearchScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Instant Search Bar
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = onQueryChanged,
+                // Integrated Search Bar with Filter Icon matching design
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp),
-                    placeholder = {
-                        Text(
-                            text = "ابحث",
-                            fontSize = 14.sp
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "بحث",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    },
-                    trailingIcon = {
-                        if (uiState.isSearching) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Search Input Box
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isDark) Color(0xFF262A30) else Color(0xFFEFEFEF))
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "بحث",
+                                modifier = Modifier.size(21.dp),
+                                tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF757575)
                             )
-                        } else if (uiState.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = onClearQuery) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "مسح"
+                            Spacer(modifier = Modifier.width(8.dp))
+                            BasicTextField(
+                                value = uiState.searchQuery,
+                                onValueChange = onQueryChanged,
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    fontSize = 15.sp,
+                                    color = if (isDark) Color(0xFFEDEDED) else Color(0xFF1A1A1A)
+                                ),
+                                decorationBox = { innerTextField ->
+                                    if (uiState.searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "البحث",
+                                            fontSize = 15.sp,
+                                            color = if (isDark) Color(0xFF8E8E93) else Color(0xFF757575)
+                                        )
+                                    }
+                                    innerTextField()
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (uiState.isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else if (uiState.searchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = onClearQuery,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "مسح",
+                                        tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF757575),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Side Filter Icon Button (clean and unbordered)
+                    val isFilterActive = uiState.searchFilter.isFilterActive
+                    IconButton(
+                        onClick = { showFilterSheet = true },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = "التصفية",
+                                modifier = Modifier.size(26.dp),
+                                tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isFilterActive) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 1.dp, y = (-1).dp)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = CircleShape
+                                        )
                                 )
                             }
                         }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -360,6 +439,7 @@ fun SearchScreen(
                                             onOpenFile = { onOpenFile(group.fileUri) },
                                             isDark = isDark,
                                             showAllRows = uiState.showAllRows,
+                                            searchFilter = uiState.searchFilter,
                                             onCopySnippet = { text ->
                                                 clipboardManager.setText(AnnotatedString(text))
                                                 coroutineScope.launch {
@@ -377,6 +457,7 @@ fun SearchScreen(
                                         showAllRows = uiState.showAllRows,
                                         verticalCopyFormat = uiState.verticalCopyFormat,
                                         expandFullCellText = uiState.expandFullCellText,
+                                        searchFilter = uiState.searchFilter,
                                         onOpenFile = { onOpenFile(group.fileUri) },
                                         onCopyRow = { text ->
                                             clipboardManager.setText(AnnotatedString(text))

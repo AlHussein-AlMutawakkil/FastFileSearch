@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.fastfilesearch.model.FilteredFileType
 import com.example.fastfilesearch.parser.FileParserDispatcher
 
 data class FileTypeVisual(
@@ -62,6 +63,19 @@ object FileTypeHelper {
                 color = Color(0xFF757575),
                 typeName = ext.uppercase()
             )
+        }
+    }
+
+    fun getVisualForGroup(group: FilteredFileType): FileTypeVisual {
+        return when (group.id) {
+            "excel" -> FileTypeVisual(Icons.Default.TableChart, Color(0xFF1E7E34), "Excel")
+            "word" -> FileTypeVisual(Icons.Default.Description, Color(0xFF185ABD), "Word")
+            "pdf" -> FileTypeVisual(Icons.Default.PictureAsPdf, Color(0xFFD32F2F), "PDF")
+            "text" -> FileTypeVisual(Icons.AutoMirrored.Filled.Article, Color(0xFF455A64), "نصوص")
+            "csv" -> FileTypeVisual(Icons.Default.TableChart, Color(0xFF00796B), "CSV")
+            "json" -> FileTypeVisual(Icons.Default.Code, Color(0xFFE65100), "JSON")
+            "markdown" -> FileTypeVisual(Icons.AutoMirrored.Filled.Article, Color(0xFF5E35B1), "Markdown")
+            else -> FileTypeVisual(Icons.AutoMirrored.Filled.InsertDriveFile, Color(0xFF757575), group.displayName)
         }
     }
 }

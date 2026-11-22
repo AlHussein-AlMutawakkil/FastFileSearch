@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TextHighlighter
@@ -61,6 +62,7 @@ fun WordPdfGroupedCard(
     onCopySnippet: (String) -> Unit,
     isDark: Boolean = isSystemInDarkTheme(),
     showAllRows: Boolean = true,
+    searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -246,10 +248,12 @@ fun WordPdfGroupedCard(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        val highlightedSnippet = remember(result.snippet, result.query, isDark) {
+                        val highlightedSnippet = remember(result.snippet, result.query, isDark, searchFilter) {
                             TextHighlighter.highlight(
                                 text = result.snippet,
                                 query = result.query,
+                                method = searchFilter.method,
+                                ignoreDiacritics = searchFilter.ignoreDiacritics,
                                 highlightColor = highlightBg,
                                 highlightTextColor = highlightFg
                             )

@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
                         onClearQuery = { viewModel.onClearQuery() },
                         onOpenFile = { viewModel.onOpenFile(it) },
                         onDismissMessage = { viewModel.onDismissMessage() },
+                        onFilterChanged = { viewModel.onFilterChanged(it) },
                         onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) },
                         onToggleShowAllRows = { viewModel.onToggleShowAllRows(it) },
                         onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },

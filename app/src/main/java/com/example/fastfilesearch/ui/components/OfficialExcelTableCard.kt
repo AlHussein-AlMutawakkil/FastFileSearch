@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TableCellHelper
 import com.example.fastfilesearch.ui.TableLayoutCalculator
@@ -128,6 +129,7 @@ fun OfficialExcelTableCard(
     verticalCopyFormat: Boolean = true,
     expandFullCellText: Boolean = true,
     onCopyRow: ((String) -> Unit)? = null,
+    searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -406,7 +408,7 @@ fun OfficialExcelTableCard(
                                     DropdownMenuItem(
                                         text = {
                                             Text(
-                                                text = "نسخ جميع الصفوف المطابقة في هذه الورقة",
+                                                text = "نسخ جميع الصفوف",
                                                 color = colors.cellTextColor,
                                                 fontSize = 13.sp
                                             )
@@ -592,10 +594,12 @@ fun OfficialExcelTableCard(
                                         contentAlignment = contentAlignment
                                     ) {
                                         if (cellText.isNotEmpty()) {
-                                            val highlightedText = remember(cellText, result.query, isDark) {
+                                            val highlightedText = remember(cellText, result.query, isDark, searchFilter) {
                                                 TextHighlighter.highlight(
                                                     text = cellText,
                                                     query = result.query,
+                                                    method = searchFilter.method,
+                                                    ignoreDiacritics = searchFilter.ignoreDiacritics,
                                                     highlightColor = highlightBg,
                                                     highlightTextColor = highlightFg
                                                 )
