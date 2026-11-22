@@ -1,5 +1,6 @@
 package com.example.fastfilesearch.ui
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -11,8 +12,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -36,15 +39,19 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -64,8 +71,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,6 +82,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -255,7 +265,6 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(horizontal = 14.dp)
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -263,7 +272,9 @@ fun SearchScreen(
                 OutlinedTextField(
                     value = uiState.searchQuery,
                     onValueChange = onQueryChanged,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp),
                     placeholder = {
                         Text(
                             text = "ابحث",
@@ -307,28 +318,34 @@ fun SearchScreen(
                 // Content View depending on State
                 when {
                     uiState.folderUri == null -> {
-                        EmptyFolderPrompt(onSelectFolderClick = onSelectFolderClick)
+                        Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                            EmptyFolderPrompt(onSelectFolderClick = onSelectFolderClick)
+                        }
                     }
 
                     uiState.searchQuery.isBlank() -> {
-                        ReadyToSearchPrompt(
-                            folderName = uiState.folderName,
-                            filesCount = uiState.filesCount,
-                            segmentsCount = uiState.segmentsCount,
-                            onRefreshClick = onRefreshClick,
-                            isIndexing = uiState.indexProgress.isIndexing
-                        )
+                        Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                            ReadyToSearchPrompt(
+                                folderName = uiState.folderName,
+                                filesCount = uiState.filesCount,
+                                segmentsCount = uiState.segmentsCount,
+                                onRefreshClick = onRefreshClick,
+                                isIndexing = uiState.indexProgress.isIndexing
+                            )
+                        }
                     }
 
                     uiState.searchResults.isEmpty() && !uiState.isSearching -> {
-                        NoResultsPrompt(query = uiState.searchQuery)
+                        Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                            NoResultsPrompt(query = uiState.searchQuery)
+                        }
                     }
 
                     else -> {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 4.dp, horizontal = 4.dp),
+                                .padding(vertical = 4.dp, horizontal = 14.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -342,7 +359,7 @@ fun SearchScreen(
 
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
                             contentPadding = PaddingValues(bottom = 24.dp)
                         ) {
                             items(
@@ -350,19 +367,21 @@ fun SearchScreen(
                                 key = { it.fileUri }
                             ) { group ->
                                 if (group.isDocument) {
-                                    // Method #1: Grouped Card for Word (.docx) & PDF (.pdf)
-                                    WordPdfGroupedCard(
-                                        group = group,
-                                        onOpenFile = { onOpenFile(group.fileUri) },
-                                        onCopySnippet = { text ->
-                                            clipboardManager.setText(AnnotatedString(text))
-                                            coroutineScope.launch {
-                                                snackbarHostState.showSnackbar("تم نسخ الفقرة إلى الحافظة")
+                                    // Method #1: Grouped Card for Word (.docx) & PDF (.pdf) with padding
+                                    Box(modifier = Modifier.padding(horizontal = 14.dp)) {
+                                        WordPdfGroupedCard(
+                                            group = group,
+                                            onOpenFile = { onOpenFile(group.fileUri) },
+                                            onCopySnippet = { text ->
+                                                clipboardManager.setText(AnnotatedString(text))
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar("تم نسخ الفقرة إلى الحافظة")
+                                                }
                                             }
-                                        }
-                                    )
+                                        )
+                                    }
                                 } else {
-                                    // Method #4: Authentic Official Excel Spreadsheet Table
+                                    // Method #4: Pure flat data table replica matching screenshot (Edge-to-Edge)
                                     OfficialExcelTableCard(
                                         group = group,
                                         onOpenFile = { onOpenFile(group.fileUri) },
@@ -541,9 +560,12 @@ fun WordPdfGroupedCard(
 }
 
 /**
- * Method #4: Official Authentic Microsoft Excel Spreadsheet Card.
- * Designed exactly like Excel with official green header, authentic sheet tab,
- * contiguous gridlines, column letters (A, B, C...) and row numbers, plus active selection border.
+ * Exact replica of the data table screen from the user's reference:
+ * - Edge-to-edge dark table layout without any bulky cards, shadows, or outer paddings.
+ * - Top header bar with file type icon, file name, and NO search/refresh icons.
+ * - Table column header with ≡ menu icon above row numbers and "عمود 1", "عمود 2", "عمود 3"...
+ * - Dark theme grid with row numbers on the side.
+ * - Dropdown menu on row number click containing ONLY "نسخ" and "مشاركة".
  */
 @Composable
 fun OfficialExcelTableCard(
@@ -552,262 +574,331 @@ fun OfficialExcelTableCard(
     onCopyRow: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.5.dp)
+    val context = LocalContext.current
+    val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
+
+    // Multi-sheet support
+    val sheetGroups = remember(group.results) {
+        group.results.groupBy { result ->
+            extractSheetAndRow(result.location).first
+        }
+    }
+
+    val onShareRow: (String) -> Unit = remember(context) {
+        { text ->
+            try {
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                    putExtra(Intent.EXTRA_TEXT, text)
+                    type = "text/plain"
+                }
+                val shareIntent = Intent.createChooser(sendIntent, "مشاركة بيانات الصف")
+                context.startActivity(shareIntent)
+            } catch (e: Exception) {
+                // Ignore fallback
+            }
+        }
+    }
+
+    // Colors matching the dark screenshot exactly
+    val topBarBg = Color(0xFF1C1F23)
+    val colHeaderBg = Color(0xFF22262B)
+    val tableBg = Color(0xFF131518)
+    val rowAltBg = Color(0xFF16191D)
+    val rowNumBg = Color(0xFF1B1E22)
+    val gridBorderColor = Color(0xFF2D3137)
+    val headerBorderColor = Color(0xFF33383F)
+    val headerTextColor = Color(0xFFB5B9BF)
+    val cellTextColor = Color(0xFFE4E7EB)
+    val matchBg = Color(0xFF1A3822)
+    val matchBorder = Color(0xFF388E3C)
+    val popupBg = Color(0xFF202328)
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(tableBg)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // 1. Official Excel Title Bar (Excel Brand Green)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(ExcelDarkGreen)
-                    .clickable(onClick = onOpenFile)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // 1. Top Bar matching the screenshot: File type icon on right, file name, and Open File button on left
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(topBarBg)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icon representing the file type
+            Icon(
+                imageVector = visual.icon,
+                contentDescription = visual.typeName,
+                tint = visual.color,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            // File Name in place of "جدول سريع"
+            Text(
+                text = group.fileName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Matches Count Badge
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color.White.copy(alpha = 0.12f)
+            ) {
+                Text(
+                    text = "${group.results.size} صف",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.9f),
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Open File Button on the left (بدل زر البحث السابق في الصورة كما طلب المستخدم)
+            IconButton(
+                onClick = onOpenFile,
+                modifier = Modifier.size(34.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.TableChart,
-                    contentDescription = "Excel",
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "فتح الملف",
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)
                 )
+            }
+        }
 
-                Spacer(modifier = Modifier.width(8.dp))
+        HorizontalDivider(color = gridBorderColor, thickness = 1.dp)
 
-                Text(
-                    text = group.fileName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+        // 2. Render Sheet Tables (Flat and direct)
+        sheetGroups.forEach { (sheetName, sheetResults) ->
+            val rowsData = remember(sheetResults) {
+                sheetResults.map { res ->
+                    val (_, rowNum) = extractSheetAndRow(res.location)
+                    val cells = TableCellHelper.splitIntoCells(res.snippet)
+                    Triple(rowNum, cells, res)
+                }
+            }
+            val maxCols = remember(rowsData) {
+                rowsData.maxOfOrNull { it.second.size }?.coerceAtLeast(1) ?: 1
+            }
 
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color.White.copy(alpha = 0.2f)
+            // Sheet Name Strip if more than 1 sheet
+            if (sheetGroups.size > 1 || sheetName != "ورقة 1") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF181B1F))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF107C41))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "${group.results.size} صف",
+                        text = sheetName,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        color = headerTextColor
                     )
                 }
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                IconButton(
-                    onClick = onOpenFile,
-                    modifier = Modifier.size(30.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "فتح في إكسل",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                HorizontalDivider(color = gridBorderColor, thickness = 0.5.dp)
             }
 
-            // 2. Rows Presentation
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                group.results.forEach { result ->
-                    val cells = remember(result.snippet) {
-                        TableCellHelper.splitIntoCells(result.snippet)
-                    }
+            // State for which row number's DropdownMenu is open
+            var menuExpandedRowIndex by remember { mutableStateOf<Int?>(null) }
 
-                    val (sheetName, rowNumber) = remember(result.location) {
-                        extractSheetAndRow(result.location)
-                    }
+            // 3. Exact Data Grid with Automatic Dynamic Column Width (Edge-to-Edge)
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val totalWidth = maxWidth
+                val rowNumWidth = 44.dp
+                val remainingWidth = if (totalWidth > rowNumWidth) totalWidth - rowNumWidth else 0.dp
+                val minColWidth = 110.dp
+                val totalNeededWidth = minColWidth * maxCols
+                val dynamicColWidth = if (totalNeededWidth < remainingWidth && maxCols > 0) {
+                    remainingWidth / maxCols
+                } else {
+                    minColWidth
+                }
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, ExcelGridLine, RoundedCornerShape(6.dp))
-                            .clip(RoundedCornerShape(6.dp))
-                    ) {
-                        // Excel Sheet Tab & Row Control Strip
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
+                        // Column Header Row: [≡] | [عمود 1] | [عمود 2] | [عمود 3] | ...
                         Row(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .background(ExcelHeaderGray)
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .background(colHeaderBg)
+                                .border(0.5.dp, headerBorderColor)
                         ) {
-                            // Sheet Tab Look
-                            Surface(
-                                shape = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp),
-                                color = Color.White,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, ExcelGridLine)
+                            // Right Corner: [≡] Menu icon above row numbers (matching screenshot)
+                            Box(
+                                modifier = Modifier
+                                    .width(rowNumWidth)
+                                    .height(38.dp)
+                                    .border(0.5.dp, headerBorderColor)
+                                    .background(colHeaderBg),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(ExcelDarkGreen)
-                                    )
-                                    Spacer(modifier = Modifier.width(5.dp))
-                                    Text(
-                                        text = sheetName,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = ExcelHeaderText
-                                    )
-                                }
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "قائمة",
+                                    tint = headerTextColor,
+                                    modifier = Modifier.size(19.dp)
+                                )
                             }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (cells.size > 2) {
-                                    Text(
-                                        text = "↔️ مرر لرؤية الأعمدة",
-                                        fontSize = 10.sp,
-                                        color = ExcelHeaderText.copy(alpha = 0.7f),
-                                        modifier = Modifier.padding(end = 6.dp)
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { onCopyRow(result.snippet) },
-                                    modifier = Modifier.size(24.dp)
+                            // Column Titles: عمود 1, عمود 2, عمود 3... with dynamic auto width
+                            for (colIndex in 0 until maxCols) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(dynamicColWidth)
+                                        .height(38.dp)
+                                        .border(0.5.dp, headerBorderColor)
+                                        .background(colHeaderBg)
+                                        .padding(horizontal = 6.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "نسخ الصف",
-                                        tint = ExcelHeaderText,
-                                        modifier = Modifier.size(13.dp)
+                                    Text(
+                                        text = "عمود ${colIndex + 1}",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = headerTextColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
                         }
 
-                        HorizontalDivider(color = ExcelGridLine, thickness = 1.dp)
+                        // Data Rows (NO click on row/cell opens file - only Open File button does)
+                        rowsData.forEachIndexed { index, (rowNum, cells, result) ->
+                            val isEven = index % 2 == 0
+                            val rowBg = if (isEven) tableBg else rowAltBg
 
-                        // 3. Official Excel Spreadsheet Grid with Contiguous Cells
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.White)
-                                .horizontalScroll(rememberScrollState())
-                        ) {
-                            Column(modifier = Modifier.width(IntrinsicSize.Max)) {
-                                // A) Excel Column Header Row: [ # ] | [ A ] | [ B ] | [ C ] ...
-                                Row(
+                            Row(
+                                modifier = Modifier.background(rowBg),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Row Number Cell: Click opens DropdownMenu with ONLY Copy & Share
+                                Box(
                                     modifier = Modifier
-                                        .background(ExcelHeaderGray)
-                                        .border(0.5.dp, ExcelHeaderBorder)
+                                        .width(rowNumWidth)
+                                        .height(IntrinsicSize.Min)
+                                        .border(0.5.dp, headerBorderColor)
+                                        .background(rowNumBg)
+                                        .clickable { menuExpandedRowIndex = index }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    // Row Header Corner
-                                    Box(
-                                        modifier = Modifier
-                                            .width(44.dp)
-                                            .height(26.dp)
-                                            .border(0.5.dp, ExcelHeaderBorder)
-                                            .background(ExcelHeaderGray),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "#",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = ExcelHeaderText,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                    }
+                                    Text(
+                                        text = rowNum,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = headerTextColor,
+                                        fontFamily = FontFamily.Monospace
+                                    )
 
-                                    // Columns A, B, C, D...
-                                    cells.forEachIndexed { colIndex, _ ->
-                                        Box(
-                                            modifier = Modifier
-                                                .widthIn(min = 100.dp)
-                                                .height(26.dp)
-                                                .border(0.5.dp, ExcelHeaderBorder)
-                                                .background(ExcelHeaderGray)
-                                                .padding(horizontal = 6.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = getExcelColumnLetter(colIndex),
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = ExcelHeaderText,
-                                                fontFamily = FontFamily.Monospace
-                                            )
-                                        }
+                                    // Popup Menu on Row Number click (ONLY "نسخ" and "مشاركة" as requested)
+                                    DropdownMenu(
+                                        expanded = menuExpandedRowIndex == index,
+                                        onDismissRequest = { menuExpandedRowIndex = null },
+                                        modifier = Modifier
+                                            .background(popupBg)
+                                            .border(0.5.dp, gridBorderColor, RoundedCornerShape(8.dp))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "نسخ",
+                                                    color = Color.White,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "نسخ",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                onCopyRow(result.snippet)
+                                                menuExpandedRowIndex = null
+                                            }
+                                        )
+                                        HorizontalDivider(color = gridBorderColor, thickness = 0.5.dp)
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "مشاركة",
+                                                    color = Color.White,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Default.Share,
+                                                    contentDescription = "مشاركة",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                onShareRow(result.snippet)
+                                                menuExpandedRowIndex = null
+                                            }
+                                        )
                                     }
                                 }
 
-                                // B) Excel Data Row: [ 45 ] | [ Data 1 ] | [ Data 2 (Active) ] | [ Data 3 ] ...
-                                Row(
-                                    modifier = Modifier
-                                        .clickable(onClick = onOpenFile)
-                                        .background(Color.White)
-                                ) {
-                                    // Row Number Cell (Left/Right margin)
-                                    Box(
-                                        modifier = Modifier
-                                            .width(44.dp)
-                                            .border(0.5.dp, ExcelHeaderBorder)
-                                            .background(ExcelHeaderGray)
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = rowNumber,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = ExcelHeaderText,
-                                            fontFamily = FontFamily.Monospace
-                                        )
+                                // Data Cells (Auto dynamic width, NO click opens file)
+                                for (colIndex in 0 until maxCols) {
+                                    val cellText = cells.getOrNull(colIndex) ?: ""
+                                    val isMatch = remember(cellText, result.query) {
+                                        TableCellHelper.isCellMatching(cellText, result.query)
+                                    }
+                                    val highlightedCellText = remember(cellText, result.query) {
+                                        TextHighlighter.highlight(cellText, result.query)
                                     }
 
-                                    // Actual Data Cells
-                                    cells.forEach { cellText ->
-                                        val isMatch = remember(cellText, result.query) {
-                                            TableCellHelper.isCellMatching(cellText, result.query)
-                                        }
-
-                                        val highlightedCellText = remember(cellText, result.query) {
-                                            TextHighlighter.highlight(cellText, result.query)
-                                        }
-
-                                        Box(
-                                            modifier = Modifier
-                                                .widthIn(min = 100.dp)
-                                                .background(if (isMatch) ExcelSelectedBg else Color.White)
-                                                .border(
-                                                    width = if (isMatch) 2.dp else 0.5.dp,
-                                                    color = if (isMatch) ExcelDarkGreen else ExcelGridLine,
-                                                    shape = RectangleShape
-                                                )
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            Text(
-                                                text = highlightedCellText,
-                                                fontSize = 13.sp,
-                                                color = Color(0xFF202124),
-                                                fontWeight = if (isMatch) FontWeight.Bold else FontWeight.Normal,
-                                                maxLines = 3,
-                                                overflow = TextOverflow.Ellipsis
+                                    Box(
+                                        modifier = Modifier
+                                            .width(dynamicColWidth)
+                                            .background(if (isMatch) matchBg else Color.Transparent)
+                                            .border(
+                                                width = if (isMatch) 1.5.dp else 0.5.dp,
+                                                color = if (isMatch) matchBorder else gridBorderColor,
+                                                shape = RectangleShape
                                             )
-                                        }
+                                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text(
+                                            text = highlightedCellText,
+                                            fontSize = 13.sp,
+                                            color = cellTextColor,
+                                            fontWeight = if (isMatch) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 5,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                     }
                                 }
                             }
@@ -815,6 +906,8 @@ fun OfficialExcelTableCard(
                     }
                 }
             }
+
+            HorizontalDivider(color = gridBorderColor, thickness = 1.dp)
         }
     }
 }
