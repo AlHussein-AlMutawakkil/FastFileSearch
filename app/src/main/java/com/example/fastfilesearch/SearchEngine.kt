@@ -52,6 +52,10 @@ class SearchEngine(private val context: Context) {
         private const val KEY_FOLDER_URI = "saved_folder_uri"
         private const val KEY_FOLDER_NAME = "saved_folder_name"
         private const val KEY_STRETCH_SINGLE_COLUMN = "stretch_single_column"
+        private const val KEY_SHOW_ALL_ROWS = "show_all_rows"
+        private const val KEY_VERTICAL_COPY_FORMAT = "vertical_copy_format"
+        private const val KEY_EXPAND_FULL_CELL_TEXT = "expand_full_cell_text"
+        private const val KEY_APP_THEME = "app_theme"
         private const val PARALLEL_WORKERS = 4
     }
 
@@ -112,6 +116,38 @@ class SearchEngine(private val context: Context) {
 
     fun setStretchSingleColumn(stretch: Boolean) {
         prefs.edit().putBoolean(KEY_STRETCH_SINGLE_COLUMN, stretch).apply()
+    }
+
+    fun isShowAllRows(): Boolean {
+        return prefs.getBoolean(KEY_SHOW_ALL_ROWS, true)
+    }
+
+    fun setShowAllRows(showAll: Boolean) {
+        prefs.edit().putBoolean(KEY_SHOW_ALL_ROWS, showAll).apply()
+    }
+
+    fun isVerticalCopyFormat(): Boolean {
+        return prefs.getBoolean(KEY_VERTICAL_COPY_FORMAT, true)
+    }
+
+    fun setVerticalCopyFormat(vertical: Boolean) {
+        prefs.edit().putBoolean(KEY_VERTICAL_COPY_FORMAT, vertical).apply()
+    }
+
+    fun isExpandFullCellText(): Boolean {
+        return prefs.getBoolean(KEY_EXPAND_FULL_CELL_TEXT, true)
+    }
+
+    fun setExpandFullCellText(expand: Boolean) {
+        prefs.edit().putBoolean(KEY_EXPAND_FULL_CELL_TEXT, expand).apply()
+    }
+
+    fun getAppTheme(): String {
+        return prefs.getString(KEY_APP_THEME, "system") ?: "system"
+    }
+
+    fun setAppTheme(theme: String) {
+        prefs.edit().putString(KEY_APP_THEME, theme).apply()
     }
 
     /**

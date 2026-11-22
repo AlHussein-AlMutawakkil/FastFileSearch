@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,8 @@ fun WordPdfGroupedCard(
     group: FileResultGroup,
     onOpenFile: () -> Unit,
     onCopySnippet: (String) -> Unit,
+    isDark: Boolean = isSystemInDarkTheme(),
+    showAllRows: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -76,14 +79,23 @@ fun WordPdfGroupedCard(
         }
     }
 
-    // Pagination: Initial limit of 15 paragraphs per document
+    // Pagination: Respects showAllRows
     var isExpandedAll by remember { mutableStateOf(false) }
-    val displayedResults = if (isExpandedAll || group.results.size <= 15) {
+    val displayedResults = if (showAllRows || isExpandedAll || group.results.size <= 15) {
         group.results
     } else {
         group.results.take(15)
     }
     val remainingCount = group.results.size - displayedResults.size
+
+    val headerBg = remember(visual.color, isDark) {
+        if (isDark) visual.color.copy(alpha = 0.16f) else visual.color.copy(alpha = 0.10f)
+    }
+    val headerTextColor = if (isDark) Color(0xFFE4E7EB) else Color(0xFF1F2937)
+
+    // Highlight text colors matching calm tint
+    val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
+    val highlightFg = if (isDark) Color(0xFFFFE082) else Color(0xFF332600)
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -94,13 +106,13 @@ fun WordPdfGroupedCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Document Header
+            // Document Header with calm, file-specific tint
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(onClick = onOpenFile)
-                    .background(visual.color.copy(alpha = 0.08f))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(headerBg)
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
@@ -125,7 +137,7 @@ fun WordPdfGroupedCard(
                         text = group.fileName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = headerTextColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -145,7 +157,7 @@ fun WordPdfGroupedCard(
                         imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = "فتح الملف",
                         tint = visual.color,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -234,8 +246,13 @@ fun WordPdfGroupedCard(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        val highlightedSnippet = remember(result.snippet, result.query) {
-                            TextHighlighter.highlight(result.snippet, result.query)
+                        val highlightedSnippet = remember(result.snippet, result.query, isDark) {
+                            TextHighlighter.highlight(
+                                text = result.snippet,
+                                query = result.query,
+                                highlightColor = highlightBg,
+                                highlightTextColor = highlightFg
+                            )
                         }
 
                         Text(
@@ -249,8 +266,8 @@ fun WordPdfGroupedCard(
                     }
                 }
 
-                // Show more button if more than 15 paragraphs
-                if (remainingCount > 0) {
+                // Show more button if more than 15 paragraphs and showAllRows is false
+                if (!showAllRows && remainingCount > 0) {
                     TextButton(
                         onClick = { isExpandedAll = true },
                         modifier = Modifier

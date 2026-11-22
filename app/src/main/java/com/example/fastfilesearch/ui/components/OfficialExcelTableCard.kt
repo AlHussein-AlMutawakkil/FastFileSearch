@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -57,27 +58,58 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TableCellHelper
 import com.example.fastfilesearch.ui.TableLayoutCalculator
 import com.example.fastfilesearch.ui.TextHighlighter
 
-private object ExcelTableColors {
-    val topBarBg = Color(0xFF1C1F23)
-    val colHeaderBg = Color(0xFF22262B)
-    val tableBg = Color(0xFF131518)
-    val rowAltBg = Color(0xFF16191D)
-    val rowNumBg = Color(0xFF1B1E22)
-    val gridBorderColor = Color(0xFF2D3137)
-    val headerBorderColor = Color(0xFF33383F)
-    val headerTextColor = Color(0xFFB5B9BF)
-    val cellTextColor = Color(0xFFE4E7EB)
-    val matchBg = Color(0xFF1A3822)
-    val matchBorder = Color(0xFF388E3C)
-    val popupBg = Color(0xFF202328)
-    val sheetStripBg = Color(0xFF181B1F)
-    val greenDot = Color(0xFF107C41)
+private class ExcelTableThemeColors(
+    val tableBg: Color,
+    val rowAltBg: Color,
+    val colHeaderBg: Color,
+    val rowNumBg: Color,
+    val gridBorderColor: Color,
+    val headerBorderColor: Color,
+    val headerTextColor: Color,
+    val cellTextColor: Color,
+    val matchBg: Color,
+    val popupBg: Color,
+    val sheetStripBg: Color
+)
+
+@Composable
+private fun rememberExcelTableColors(isDark: Boolean): ExcelTableThemeColors {
+    return remember(isDark) {
+        if (isDark) {
+            ExcelTableThemeColors(
+                tableBg = Color(0xFF131518),
+                rowAltBg = Color(0xFF16191D),
+                colHeaderBg = Color(0xFF1F2328),
+                rowNumBg = Color(0xFF1B1E22),
+                gridBorderColor = Color(0xFF2D3137),
+                headerBorderColor = Color(0xFF33383F),
+                headerTextColor = Color(0xFFB5B9BF),
+                cellTextColor = Color(0xFFE4E7EB),
+                matchBg = Color(0xFF28251C), // Ultra-calm, subtle warm glow in dark mode
+                popupBg = Color(0xFF202328),
+                sheetStripBg = Color(0xFF181B1F)
+            )
+        } else {
+            ExcelTableThemeColors(
+                tableBg = Color(0xFFFFFFFF),
+                rowAltBg = Color(0xFFF9FAFB),
+                colHeaderBg = Color(0xFFF1F3F5),
+                rowNumBg = Color(0xFFEDEDF0),
+                gridBorderColor = Color(0xFFE2E4E8),
+                headerBorderColor = Color(0xFFD0D3D9),
+                headerTextColor = Color(0xFF495057),
+                cellTextColor = Color(0xFF212529),
+                matchBg = Color(0xFFFFF8E7), // Ultra-calm, delicate soft cream glow in light mode
+                popupBg = Color(0xFFFFFFFF),
+                sheetStripBg = Color(0xFFF1F3F5)
+            )
+        }
+    }
 }
 
 private data class CellDetailDialogInfo(
@@ -86,28 +118,32 @@ private data class CellDetailDialogInfo(
     val fullText: String
 )
 
-/**
- * Exact replica of the data table screen:
- * - Edge-to-edge dark table layout.
- * - Top header bar with file type icon, file name, and Open File button.
- * - Accurate layout calculation with TextMeasurer.
- * - Sorted rows by rowNumber.
- * - Formatted copy and share (column: value - column: value).
- * - Full content viewer dialog on cell click.
- * - 20 rows pagination limit per sheet.
- * - Interactive sheet menu on top-corner icon.
- */
 @Composable
 fun OfficialExcelTableCard(
     group: FileResultGroup,
     onOpenFile: () -> Unit,
+    isDark: Boolean = isSystemInDarkTheme(),
     stretchSingleColumn: Boolean = true,
+    showAllRows: Boolean = true,
+    verticalCopyFormat: Boolean = true,
+    expandFullCellText: Boolean = true,
     onCopyRow: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
+    val colors = rememberExcelTableColors(isDark)
+
+    // Calm, soft pastel top bar color matching the file type
+    val topBarBg = remember(visual.color, isDark) {
+        if (isDark) visual.color.copy(alpha = 0.16f) else visual.color.copy(alpha = 0.10f)
+    }
+    val topBarTextColor = if (isDark) Color(0xFFE4E7EB) else Color(0xFF1F2937)
+
+    // Highlight text colors matching calm tint
+    val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
+    val highlightFg = if (isDark) Color(0xFFFFE082) else Color(0xFF332600)
 
     // Multi-sheet support: Use result.sheetName first, fallback to extractSheetAndRow
     val sheetGroups = remember(group.results) {
@@ -171,14 +207,14 @@ fun OfficialExcelTableCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(ExcelTableColors.tableBg)
+            .background(colors.tableBg)
     ) {
-        // 1. Top Bar: File type icon, file name, and Open File button
+        // 1. Top Bar: Calm file-specific tint, icon, file name, matches count, and Open File button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(ExcelTableColors.topBarBg)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .background(topBarBg)
+                .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -194,7 +230,7 @@ fun OfficialExcelTableCard(
                 text = group.fileName,
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
-                color = Color.White,
+                color = topBarTextColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -204,13 +240,13 @@ fun OfficialExcelTableCard(
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.15f))
+                    .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
                     .padding(horizontal = 9.dp, vertical = 3.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "${group.results.size} مطابقة",
-                    color = Color.White,
+                    color = if (isDark) Color(0xFFE4E7EB) else visual.color,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -225,13 +261,13 @@ fun OfficialExcelTableCard(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                     contentDescription = "فتح الملف",
-                    tint = Color.White,
+                    tint = visual.color,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        HorizontalDivider(color = ExcelTableColors.gridBorderColor, thickness = 1.dp)
+        HorizontalDivider(color = colors.gridBorderColor, thickness = 1.dp)
 
         // 2. Render Sheet Tables
         sheetGroups.forEach { (sheetName, sheetResults) ->
@@ -246,9 +282,9 @@ fun OfficialExcelTableCard(
                 sortedResults.firstOrNull { it.columnHeaders.isNotEmpty() }?.columnHeaders ?: emptyList()
             }
 
-            // Pagination limit: 20 rows per sheet initially
+            // Pagination limit: Respects showAllRows setting
             var isExpandedAll by remember { mutableStateOf(false) }
-            val displayedResults = if (isExpandedAll || sortedResults.size <= 20) {
+            val displayedResults = if (showAllRows || isExpandedAll || sortedResults.size <= 20) {
                 sortedResults
             } else {
                 sortedResults.take(20)
@@ -272,7 +308,7 @@ fun OfficialExcelTableCard(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(ExcelTableColors.sheetStripBg)
+                        .background(colors.sheetStripBg)
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -280,17 +316,17 @@ fun OfficialExcelTableCard(
                         modifier = Modifier
                             .size(6.dp)
                             .clip(CircleShape)
-                            .background(ExcelTableColors.greenDot)
+                            .background(visual.color)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = sheetName,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = ExcelTableColors.headerTextColor
+                        color = colors.headerTextColor
                     )
                 }
-                HorizontalDivider(color = ExcelTableColors.gridBorderColor, thickness = 0.5.dp)
+                HorizontalDivider(color = colors.gridBorderColor, thickness = 0.5.dp)
             }
 
             var menuExpandedRowIndex by remember { mutableStateOf<Int?>(null) }
@@ -340,7 +376,7 @@ fun OfficialExcelTableCard(
                         Row(
                             modifier = Modifier
                                 .height(38.dp)
-                                .background(ExcelTableColors.colHeaderBg),
+                                .background(colors.colHeaderBg),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Top-left corner icon with interactive sheet options menu
@@ -348,15 +384,15 @@ fun OfficialExcelTableCard(
                                 modifier = Modifier
                                     .width(dims.rowNumWidth)
                                     .height(38.dp)
-                                    .border(0.5.dp, ExcelTableColors.headerBorderColor)
-                                    .background(ExcelTableColors.colHeaderBg)
+                                    .border(0.5.dp, colors.headerBorderColor)
+                                    .background(colors.colHeaderBg)
                                     .clickable { sheetMenuExpanded = true },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = "خيارات الورقة",
-                                    tint = ExcelTableColors.headerTextColor,
+                                    tint = colors.headerTextColor,
                                     modifier = Modifier.size(19.dp)
                                 )
 
@@ -364,21 +400,27 @@ fun OfficialExcelTableCard(
                                     expanded = sheetMenuExpanded,
                                     onDismissRequest = { sheetMenuExpanded = false },
                                     modifier = Modifier
-                                        .background(ExcelTableColors.popupBg)
-                                        .border(0.5.dp, ExcelTableColors.gridBorderColor, RoundedCornerShape(8.dp))
+                                        .background(colors.popupBg)
+                                        .border(0.5.dp, colors.gridBorderColor, RoundedCornerShape(8.dp))
                                 ) {
                                     DropdownMenuItem(
                                         text = {
                                             Text(
                                                 text = "نسخ جميع الصفوف المطابقة في هذه الورقة",
-                                                color = Color.White,
+                                                color = colors.cellTextColor,
                                                 fontSize = 13.sp
                                             )
                                         },
                                         onClick = {
                                             sheetMenuExpanded = false
-                                            val allText = rowsData.joinToString("\n") { (rNum, cells, _) ->
-                                                "صف $rNum: " + formatRowText(cells, sheetHeaders)
+                                            val allText = if (verticalCopyFormat) {
+                                                rowsData.joinToString("\n----------------------------------------\n") { (rNum, cells, _) ->
+                                                    "صف $rNum:\n" + formatRowText(cells, sheetHeaders, vertical = true)
+                                                }
+                                            } else {
+                                                rowsData.joinToString("\n") { (rNum, cells, _) ->
+                                                    "صف $rNum: " + formatRowText(cells, sheetHeaders, vertical = false)
+                                                }
                                             }
                                             clipboardManager.setText(AnnotatedString(allText))
                                         },
@@ -386,7 +428,7 @@ fun OfficialExcelTableCard(
                                             Icon(
                                                 imageVector = Icons.Default.ContentCopy,
                                                 contentDescription = null,
-                                                tint = ExcelTableColors.headerTextColor,
+                                                tint = colors.headerTextColor,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }
@@ -402,8 +444,8 @@ fun OfficialExcelTableCard(
                                     modifier = Modifier
                                         .width(colW)
                                         .height(38.dp)
-                                        .border(0.5.dp, ExcelTableColors.headerBorderColor)
-                                        .background(ExcelTableColors.colHeaderBg)
+                                        .border(0.5.dp, colors.headerBorderColor)
+                                        .background(colors.colHeaderBg)
                                         .padding(horizontal = 6.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -411,7 +453,7 @@ fun OfficialExcelTableCard(
                                         text = colTitle,
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = ExcelTableColors.headerTextColor,
+                                        color = colors.headerTextColor,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         textAlign = TextAlign.Center
@@ -423,7 +465,7 @@ fun OfficialExcelTableCard(
                         // Data Rows
                         rowsData.forEachIndexed { index, (rowNum, cells, result) ->
                             val isEven = index % 2 == 0
-                            val rowBg = if (isEven) ExcelTableColors.tableBg else ExcelTableColors.rowAltBg
+                            val rowBg = if (isEven) colors.tableBg else colors.rowAltBg
 
                             Row(
                                 modifier = Modifier
@@ -437,8 +479,8 @@ fun OfficialExcelTableCard(
                                         .width(dims.rowNumWidth)
                                         .fillMaxHeight()
                                         .defaultMinSize(minHeight = 42.dp)
-                                        .border(0.5.dp, ExcelTableColors.headerBorderColor)
-                                        .background(ExcelTableColors.rowNumBg)
+                                        .border(0.5.dp, colors.headerBorderColor)
+                                        .background(colors.rowNumBg)
                                         .clickable { menuExpandedRowIndex = index }
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
@@ -447,7 +489,7 @@ fun OfficialExcelTableCard(
                                         text = rowNum,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = ExcelTableColors.headerTextColor,
+                                        color = colors.headerTextColor,
                                         fontFamily = FontFamily.Monospace
                                     )
 
@@ -456,18 +498,18 @@ fun OfficialExcelTableCard(
                                         expanded = menuExpandedRowIndex == index,
                                         onDismissRequest = { menuExpandedRowIndex = null },
                                         modifier = Modifier
-                                            .background(ExcelTableColors.popupBg)
-                                            .border(0.5.dp, ExcelTableColors.gridBorderColor, RoundedCornerShape(8.dp))
+                                            .background(colors.popupBg)
+                                            .border(0.5.dp, colors.gridBorderColor, RoundedCornerShape(8.dp))
                                     ) {
-                                        val formattedRow = remember(cells, sheetHeaders) {
-                                            formatRowText(cells, sheetHeaders)
+                                        val formattedRow = remember(cells, sheetHeaders, verticalCopyFormat) {
+                                            formatRowText(cells, sheetHeaders, vertical = verticalCopyFormat)
                                         }
 
                                         DropdownMenuItem(
                                             text = {
                                                 Text(
                                                     text = "نسخ الصف",
-                                                    color = Color.White,
+                                                    color = colors.cellTextColor,
                                                     fontSize = 14.sp
                                                 )
                                             },
@@ -483,7 +525,7 @@ fun OfficialExcelTableCard(
                                                 Icon(
                                                     imageVector = Icons.Default.ContentCopy,
                                                     contentDescription = "نسخ",
-                                                    tint = ExcelTableColors.headerTextColor,
+                                                    tint = colors.headerTextColor,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -493,7 +535,7 @@ fun OfficialExcelTableCard(
                                             text = {
                                                 Text(
                                                     text = "مشاركة",
-                                                    color = Color.White,
+                                                    color = colors.cellTextColor,
                                                     fontSize = 14.sp
                                                 )
                                             },
@@ -505,7 +547,7 @@ fun OfficialExcelTableCard(
                                                 Icon(
                                                     imageVector = Icons.Default.Share,
                                                     contentDescription = "مشاركة",
-                                                    tint = ExcelTableColors.headerTextColor,
+                                                    tint = colors.headerTextColor,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -513,7 +555,7 @@ fun OfficialExcelTableCard(
                                     }
                                 }
 
-                                // Cells in Row
+                                // Cells in Row: ONLY background is tinted on match, borders remain identical to all cells
                                 for (colIndex in 0 until maxCols) {
                                     val cellText = cells.getOrNull(colIndex) ?: ""
                                     val colW = dims.columnWidths.getOrElse(colIndex) { 110.dp }
@@ -523,9 +565,7 @@ fun OfficialExcelTableCard(
                                         TableCellHelper.isCellMatching(cellText, result.query)
                                     }
 
-                                    val cellBg = if (isMatch) ExcelTableColors.matchBg else Color.Transparent
-                                    val borderC = if (isMatch) ExcelTableColors.matchBorder else ExcelTableColors.gridBorderColor
-                                    val borderW = if (isMatch) 1.dp else 0.5.dp
+                                    val cellBg = if (isMatch) colors.matchBg else Color.Transparent
 
                                     // Align start for single column and long text cells (> 22 chars), center for short/numeric
                                     val isLong = cellText.length > 22 || maxCols == 1
@@ -537,7 +577,7 @@ fun OfficialExcelTableCard(
                                             .width(colW)
                                             .fillMaxHeight()
                                             .defaultMinSize(minHeight = 42.dp)
-                                            .border(borderW, borderC)
+                                            .border(0.5.dp, colors.gridBorderColor) // Uniform grid line for ALL cells
                                             .background(cellBg)
                                             .clickable {
                                                 if (cellText.isNotBlank()) {
@@ -552,16 +592,21 @@ fun OfficialExcelTableCard(
                                         contentAlignment = contentAlignment
                                     ) {
                                         if (cellText.isNotEmpty()) {
-                                            val highlightedText = remember(cellText, result.query) {
-                                                TextHighlighter.highlight(cellText, result.query)
+                                            val highlightedText = remember(cellText, result.query, isDark) {
+                                                TextHighlighter.highlight(
+                                                    text = cellText,
+                                                    query = result.query,
+                                                    highlightColor = highlightBg,
+                                                    highlightTextColor = highlightFg
+                                                )
                                             }
 
                                             Text(
                                                 text = highlightedText,
                                                 fontSize = 13.sp,
-                                                color = ExcelTableColors.cellTextColor,
-                                                maxLines = 4,
-                                                overflow = TextOverflow.Ellipsis,
+                                                color = colors.cellTextColor,
+                                                maxLines = if (expandFullCellText) Int.MAX_VALUE else 4,
+                                                overflow = if (expandFullCellText) TextOverflow.Clip else TextOverflow.Ellipsis,
                                                 textAlign = textAlign,
                                                 lineHeight = 18.sp
                                             )
@@ -574,13 +619,13 @@ fun OfficialExcelTableCard(
                 }
             }
 
-            // Pagination button: Show more rows if exceeding 20
-            if (remainingRowsCount > 0) {
+            // Pagination button: Show more rows if exceeding 20 when showAllRows is disabled
+            if (!showAllRows && remainingRowsCount > 0) {
                 TextButton(
                     onClick = { isExpandedAll = true },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(ExcelTableColors.rowAltBg)
+                        .background(colors.rowAltBg)
                         .padding(vertical = 4.dp)
                 ) {
                     Text(
@@ -592,26 +637,29 @@ fun OfficialExcelTableCard(
                 }
             }
 
-            HorizontalDivider(color = ExcelTableColors.gridBorderColor, thickness = 1.dp)
+            HorizontalDivider(color = colors.gridBorderColor, thickness = 1.dp)
         }
     }
 }
 
 /**
  * Formats row cell values cleanly for clipboard copy and system share.
- * Produces "Header1: Value1 - Header2: Value2" instead of raw tab-delimited text.
+ * When vertical is true: produces "Header: Value\nHeader: Value"
+ * When vertical is false: produces "Header: Value - Header: Value"
  */
-private fun formatRowText(cells: List<String>, headers: List<String>): String {
+private fun formatRowText(cells: List<String>, headers: List<String>, vertical: Boolean): String {
     val pairs = cells.mapIndexedNotNull { index, cell ->
         if (cell.isNotBlank()) {
             val colName = headers.getOrNull(index)?.takeIf { it.isNotBlank() } ?: "عمود ${index + 1}"
             "$colName: $cell"
         } else null
     }
+
+    val delimiter = if (vertical) "\n" else " - "
     return if (pairs.isNotEmpty()) {
-        pairs.joinToString(" - ")
+        pairs.joinToString(delimiter)
     } else {
-        cells.filter { it.isNotBlank() }.joinToString(" - ")
+        cells.filter { it.isNotBlank() }.joinToString(delimiter)
     }
 }
 

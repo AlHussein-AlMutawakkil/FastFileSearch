@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,9 +27,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            FastFileSearchTheme {
-                val uiState by viewModel.uiState.collectAsState()
+            val uiState by viewModel.uiState.collectAsState()
+            val isDark = when (uiState.appTheme) {
+                "dark" -> true
+                "light" -> false
+                else -> isSystemInDarkTheme()
+            }
 
+            FastFileSearchTheme(darkTheme = isDark) {
                 // Folder Picker Contract using SAF
                 val folderPickerLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.OpenDocumentTree()
@@ -52,7 +58,11 @@ class MainActivity : ComponentActivity() {
                         onClearQuery = { viewModel.onClearQuery() },
                         onOpenFile = { viewModel.onOpenFile(it) },
                         onDismissMessage = { viewModel.onDismissMessage() },
-                        onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) }
+                        onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) },
+                        onToggleShowAllRows = { viewModel.onToggleShowAllRows(it) },
+                        onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },
+                        onToggleExpandFullCellText = { viewModel.onToggleExpandFullCellText(it) },
+                        onSetAppTheme = { viewModel.onSetAppTheme(it) }
                     )
                 }
             }

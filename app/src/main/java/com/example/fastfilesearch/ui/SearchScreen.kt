@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,6 +83,10 @@ fun SearchScreen(
     onOpenFile: (String) -> Unit,
     onDismissMessage: () -> Unit,
     onToggleStretchSingleColumn: (Boolean) -> Unit = {},
+    onToggleShowAllRows: (Boolean) -> Unit = {},
+    onToggleVerticalCopyFormat: (Boolean) -> Unit = {},
+    onToggleExpandFullCellText: (Boolean) -> Unit = {},
+    onSetAppTheme: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -112,6 +117,12 @@ fun SearchScreen(
             }
     }
 
+    val isDark = when (uiState.appTheme) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemInDarkTheme()
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         // Settings Modal Dialog wrapped in RTL Provider to ensure correct layout direction on all devices
         if (showSettingsDialog) {
@@ -120,12 +131,17 @@ fun SearchScreen(
                 onSelectFolderClick = onSelectFolderClick,
                 onRefreshClick = onRefreshClick,
                 onToggleStretchSingleColumn = onToggleStretchSingleColumn,
+                onToggleShowAllRows = onToggleShowAllRows,
+                onToggleVerticalCopyFormat = onToggleVerticalCopyFormat,
+                onToggleExpandFullCellText = onToggleExpandFullCellText,
+                onSetAppTheme = onSetAppTheme,
                 onDismiss = { showSettingsDialog = false }
             )
         }
 
         Scaffold(
             modifier = modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 Column {
@@ -342,6 +358,8 @@ fun SearchScreen(
                                         WordPdfGroupedCard(
                                             group = group,
                                             onOpenFile = { onOpenFile(group.fileUri) },
+                                            isDark = isDark,
+                                            showAllRows = uiState.showAllRows,
                                             onCopySnippet = { text ->
                                                 clipboardManager.setText(AnnotatedString(text))
                                                 coroutineScope.launch {
@@ -354,7 +372,11 @@ fun SearchScreen(
                                     // Flat data table replica (Edge-to-Edge)
                                     OfficialExcelTableCard(
                                         group = group,
+                                        isDark = isDark,
                                         stretchSingleColumn = uiState.stretchSingleColumn,
+                                        showAllRows = uiState.showAllRows,
+                                        verticalCopyFormat = uiState.verticalCopyFormat,
+                                        expandFullCellText = uiState.expandFullCellText,
                                         onOpenFile = { onOpenFile(group.fileUri) },
                                         onCopyRow = { text ->
                                             clipboardManager.setText(AnnotatedString(text))

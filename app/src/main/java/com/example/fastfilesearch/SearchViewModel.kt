@@ -27,7 +27,11 @@ data class SearchUiState(
     val filesCount: Int = 0,
     val segmentsCount: Int = 0,
     val userMessage: String? = null,
-    val stretchSingleColumn: Boolean = true
+    val stretchSingleColumn: Boolean = true,
+    val showAllRows: Boolean = true,
+    val verticalCopyFormat: Boolean = true,
+    val expandFullCellText: Boolean = true,
+    val appTheme: String = "system"
 )
 
 @OptIn(FlowPreview::class)
@@ -46,12 +50,20 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val savedUri = searchEngine.getSavedFolderUri()
         val savedName = searchEngine.getSavedFolderName()
         val stretchPref = searchEngine.isStretchSingleColumn()
+        val showAllRowsPref = searchEngine.isShowAllRows()
+        val verticalCopyPref = searchEngine.isVerticalCopyFormat()
+        val expandCellPref = searchEngine.isExpandFullCellText()
+        val themePref = searchEngine.getAppTheme()
 
         _uiState.update {
             it.copy(
                 folderUri = savedUri,
                 folderName = savedName,
-                stretchSingleColumn = stretchPref
+                stretchSingleColumn = stretchPref,
+                showAllRows = showAllRowsPref,
+                verticalCopyFormat = verticalCopyPref,
+                expandFullCellText = expandCellPref,
+                appTheme = themePref
             )
         }
 
@@ -212,6 +224,26 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun onToggleStretchSingleColumn(stretch: Boolean) {
         searchEngine.setStretchSingleColumn(stretch)
         _uiState.update { it.copy(stretchSingleColumn = stretch) }
+    }
+
+    fun onToggleShowAllRows(showAll: Boolean) {
+        searchEngine.setShowAllRows(showAll)
+        _uiState.update { it.copy(showAllRows = showAll) }
+    }
+
+    fun onToggleVerticalCopyFormat(vertical: Boolean) {
+        searchEngine.setVerticalCopyFormat(vertical)
+        _uiState.update { it.copy(verticalCopyFormat = vertical) }
+    }
+
+    fun onToggleExpandFullCellText(expand: Boolean) {
+        searchEngine.setExpandFullCellText(expand)
+        _uiState.update { it.copy(expandFullCellText = expand) }
+    }
+
+    fun onSetAppTheme(theme: String) {
+        searchEngine.setAppTheme(theme)
+        _uiState.update { it.copy(appTheme = theme) }
     }
 
     fun onDismissMessage() {
