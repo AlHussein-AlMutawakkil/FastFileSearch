@@ -9,6 +9,9 @@ import com.example.fastfilesearch.util.ArabicNormalizer
 
 object TextHighlighter {
 
+    private val WHITESPACE_REGEX = "\\s+".toRegex()
+    private val TOKENIZE_REGEX = Regex("(?<=\\s)|(?=\\s)|(?<=[^\\p{L}\\p{Nd}])|(?=[^\\p{L}\\p{Nd}])")
+
     /**
      * Highlights search terms inside the original text by matching normalized tokens,
      * so variations like (أ / إ / آ / ا, ة / ه, ى / ي, تشكيل) are accurately highlighted.
@@ -24,13 +27,13 @@ object TextHighlighter {
         }
 
         val normalizedQuery = ArabicNormalizer.normalize(query)
-        val queryTokens = normalizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val queryTokens = normalizedQuery.split(WHITESPACE_REGEX).filter { it.isNotBlank() }
         if (queryTokens.isEmpty()) {
             return AnnotatedString(text)
         }
 
         // Tokenize original text into words while keeping track of original offsets
-        val words = text.split(Regex("(?<=\\s)|(?=\\s)|(?<=[^\\p{L}\\p{Nd}])|(?=[^\\p{L}\\p{Nd}])"))
+        val words = text.split(TOKENIZE_REGEX)
         val matchedRanges = mutableListOf<IntRange>()
 
         var currentOffset = 0

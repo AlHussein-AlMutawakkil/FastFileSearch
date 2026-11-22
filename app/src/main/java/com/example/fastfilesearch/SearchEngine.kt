@@ -73,6 +73,13 @@ class SearchEngine(private val context: Context) {
     }
 
     fun saveFolderUri(uri: Uri, folderName: String = "") {
+        // If folder changed to a completely different URI, clear the old index at once
+        val previousUriStr = prefs.getString(KEY_FOLDER_URI, null)
+        if (previousUriStr != null && previousUriStr != uri.toString()) {
+            Log.i(TAG, "Target folder changed from $previousUriStr to $uri. Clearing entire index cache.")
+            dbHelper.clearAll()
+        }
+
         // Persist SAF permissions
         try {
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -111,7 +118,7 @@ class SearchEngine(private val context: Context) {
      * Executes Delta Sync:
      * 1. Scans folder tree.
      * 2. Compares signature (uri, size, lastModified) against DB.
-     * 3. Deletes records of removed files.
+     * 3. Deletes records of removed files (clears all at once if no overlap).
      * 4. Indexes new or modified files in parallel (4 files concurrently).
      * 5. Skips unchanged files (0 I/O).
      */
@@ -128,12 +135,18 @@ class SearchEngine(private val context: Context) {
         // 2. Fetch existing indexed files footprint from SQLite
         val indexedMap = dbHelper.getAllIndexedFiles()
 
-        // 3. Remove deleted files from DB
+        // 3. Remove deleted files from DB (clear all at once if completely different folder)
         var deletedCount = 0
-        for ((existingUri, _) in indexedMap) {
-            if (!discoveredMap.containsKey(existingUri)) {
-                dbHelper.deleteFileIndex(existingUri)
-                deletedCount++
+        if (indexedMap.isNotEmpty() && discoveredFiles.isNotEmpty() && discoveredMap.keys.none { indexedMap.containsKey(it) }) {
+            Log.i(TAG, "No overlap with previous indexed files. Clearing old index all at once.")
+            deletedCount = indexedMap.size
+            dbHelper.clearAll()
+        } else {
+            for ((existingUri, _) in indexedMap) {
+                if (!discoveredMap.containsKey(existingUri)) {
+                    dbHelper.deleteFileIndex(existingUri)
+                    deletedCount++
+                }
             }
         }
 
@@ -208,12 +221,17 @@ class SearchEngine(private val context: Context) {
     private fun indexSingleFile(file: DiscoveredFile) {
         try {
             val segments = mutableListOf<FileSegment>()
+            val sheetHeaders = mutableMapOf<String, List<String>>()
+
             context.contentResolver.openInputStream(file.uri)?.use { inputStream ->
                 FileParserDispatcher.parseFile(
                     context = context,
                     inputStream = inputStream,
                     fileUri = file.uri.toString(),
-                    fileName = file.name
+                    fileName = file.name,
+                    onHeaderFound = { sheetName, headers ->
+                        sheetHeaders[sheetName] = headers
+                    }
                 ) { segment ->
                     segments.add(segment)
                 }
@@ -227,7 +245,7 @@ class SearchEngine(private val context: Context) {
                 lastModified = file.lastModified
             )
 
-            dbHelper.saveFileAndSegments(record, segments)
+            dbHelper.saveFileAndSegments(record, segments, sheetHeaders)
         } catch (t: Throwable) {
             Log.e(TAG, "Failed indexing file ${file.name} at ${file.uri}", t)
         }
@@ -336,7 +354,7 @@ class SearchEngine(private val context: Context) {
     }
 
     /**
-     * Executes instant FTS5 search.
+     * Executes instant FTS search.
      */
     suspend fun search(query: String): List<SearchResult> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext emptyList()

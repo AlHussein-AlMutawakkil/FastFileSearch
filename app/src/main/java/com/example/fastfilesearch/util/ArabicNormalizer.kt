@@ -10,6 +10,7 @@ object ArabicNormalizer {
      * - Normalizes Alef Maksura (ى) -> ي
      * - Normalizes Ta Marbuta (ة) -> ه
      * - Normalizes Persian/Urdu variants (ک -> ك, ی -> ي)
+     * - Converts Eastern Arabic-Indic numerals (٠..٩) and Persian numerals (۰..۹) to ASCII digits (0..9)
      * - Converts to lowercase and normalizes whitespace
      */
     fun normalize(text: String): String {
@@ -71,6 +72,18 @@ object ArabicNormalizer {
                 '\u06CC' // ی -> ي
                 -> {
                     sb.append('\u064A')
+                    lastWasSpace = false
+                }
+
+                // Eastern Arabic-Indic numerals (٠..٩) -> 0..9
+                in '\u0660'..'\u0669' -> {
+                    sb.append(('0'.code + (char - '\u0660')).toChar())
+                    lastWasSpace = false
+                }
+
+                // Persian/Urdu numerals (۰..۹) -> 0..9
+                in '\u06F0'..'\u06F9' -> {
+                    sb.append(('0'.code + (char - '\u06F0')).toChar())
                     lastWasSpace = false
                 }
 

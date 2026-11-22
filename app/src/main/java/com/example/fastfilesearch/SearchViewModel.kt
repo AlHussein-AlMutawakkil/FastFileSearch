@@ -5,10 +5,13 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fastfilesearch.model.SearchResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
@@ -36,30 +39,39 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private val searchQueryFlow = MutableStateFlow("")
+    private var searchJob: Job? = null
 
     init {
         // Restore saved folder & preferences
         val savedUri = searchEngine.getSavedFolderUri()
         val savedName = searchEngine.getSavedFolderName()
-        val stats = searchEngine.getIndexStats()
         val stretchPref = searchEngine.isStretchSingleColumn()
 
         _uiState.update {
             it.copy(
                 folderUri = savedUri,
                 folderName = savedName,
-                filesCount = stats.first,
-                segmentsCount = stats.second,
                 stretchSingleColumn = stretchPref
             )
         }
 
-        // Setup debounced search query listener
+        // Query database stats asynchronously on IO dispatcher to avoid Main Thread blocking
+        viewModelScope.launch(Dispatchers.IO) {
+            val stats = searchEngine.getIndexStats()
+            _uiState.update {
+                it.copy(
+                    filesCount = stats.first,
+                    segmentsCount = stats.second
+                )
+            }
+        }
+
+        // Setup debounced search query listener with collectLatest to cancel previous searches
         viewModelScope.launch {
             searchQueryFlow
                 .debounce(150L)
                 .distinctUntilChanged()
-                .collect { query ->
+                .collectLatest { query ->
                     executeSearch(query)
                 }
         }
@@ -94,6 +106,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onClearQuery() {
+        searchJob?.cancel()
         _uiState.update {
             it.copy(
                 searchQuery = "",
@@ -105,6 +118,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun executeSearch(query: String) {
+        searchJob?.cancel()
+
         if (query.isBlank()) {
             _uiState.update {
                 it.copy(
@@ -117,7 +132,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
         _uiState.update { it.copy(isSearching = true) }
 
-        viewModelScope.launch {
+        searchJob = viewModelScope.launch {
             try {
                 val results = searchEngine.search(query)
                 _uiState.update {
@@ -126,6 +141,9 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         isSearching = false
                     )
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancelled by a newer search request; ignore
+                throw e
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(

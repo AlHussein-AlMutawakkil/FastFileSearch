@@ -17,14 +17,19 @@ object ExcelXlsxParser {
 
     /**
      * Extracts text from modern Excel (.xlsx) files using a streaming, high-performance
-     * OpenXML Zip + XmlPullParser implementation that does not depend on StAX (javax.xml.stream)
-     * which is absent from Android's runtime.
+     * OpenXML Zip + XmlPullParser implementation that does not depend on StAX (javax.xml.stream).
+     *
+     * Correctly aligns columns by parsing cell references (e.g. r="C5" -> column index 2),
+     * pads missing cells with "", and joins row data with "\t".
+     *
+     * Inspects the first 5 non-empty rows to determine true column headers for each sheet.
      */
     fun parse(
         context: Context,
         inputStream: InputStream,
         fileUri: String,
         fileName: String,
+        onHeaderFound: (sheetName: String, headers: List<String>) -> Unit = { _, _ -> },
         onSegmentFound: (FileSegment) -> Unit
     ) {
         val tempFile = File.createTempFile("xlsx_", ".tmp", context.cacheDir)
@@ -66,12 +71,14 @@ object ExcelXlsxParser {
                         sharedStrings = sharedStrings,
                         fileUri = fileUri,
                         fileName = fileName,
+                        onHeaderFound = onHeaderFound,
                         onSegmentFound = onSegmentFound
                     )
                 }
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Error parsing xlsx file: $fileName", t)
+            throw t
         } finally {
             try {
                 if (tempFile.exists()) tempFile.delete()
@@ -152,6 +159,41 @@ object ExcelXlsxParser {
         return sharedStrings
     }
 
+    /**
+     * Converts an Excel column reference (e.g. "C", "AA") into a 0-based index.
+     * "A" -> 0, "B" -> 1, "Z" -> 25, "AA" -> 26, etc.
+     */
+    private fun extractColumnIndexFromRef(cellRef: String?): Int? {
+        if (cellRef.isNullOrEmpty()) return null
+        var i = 0
+        while (i < cellRef.length && cellRef[i].isLetter()) {
+            i++
+        }
+        if (i == 0) return null
+        val colLetters = cellRef.substring(0, i)
+        var col = 0
+        for (ch in colLetters.uppercase()) {
+            if (ch in 'A'..'Z') {
+                col = col * 26 + (ch - 'A' + 1)
+            }
+        }
+        return col - 1
+    }
+
+    private fun selectSheetHeaders(candidateRows: List<List<String>>): List<String> {
+        if (candidateRows.isEmpty()) return emptyList()
+        val multiCellRow = candidateRows.firstOrNull { row ->
+            row.count { it.isNotBlank() } > 1
+        }
+        if (multiCellRow != null) {
+            return multiCellRow
+        }
+        val mostFilledRow = candidateRows.maxByOrNull { row ->
+            row.count { it.isNotBlank() }
+        }
+        return mostFilledRow ?: emptyList()
+    }
+
     private fun parseSheetData(
         zip: ZipFile,
         sheetEntry: ZipEntry,
@@ -159,101 +201,127 @@ object ExcelXlsxParser {
         sharedStrings: List<String>,
         fileUri: String,
         fileName: String,
+        onHeaderFound: (sheetName: String, headers: List<String>) -> Unit,
         onSegmentFound: (FileSegment) -> Unit
     ) {
-        try {
-            zip.getInputStream(sheetEntry).use { stream ->
-                val parser: XmlPullParser = Xml.newPullParser()
-                parser.setInput(stream, "UTF-8")
-                var event = parser.eventType
+        val candidateHeaderRows = mutableListOf<List<String>>()
 
-                var currentRowNum = 0
-                val rowCells = mutableListOf<String>()
-                var currentCellType: String? = null
-                val cellTextBuffer = StringBuilder()
-                var insideCell = false
-                var insideIs = false
+        zip.getInputStream(sheetEntry).use { stream ->
+            val parser: XmlPullParser = Xml.newPullParser()
+            parser.setInput(stream, "UTF-8")
+            var event = parser.eventType
 
-                while (event != XmlPullParser.END_DOCUMENT) {
-                    when (event) {
-                        XmlPullParser.START_TAG -> {
-                            val name = parser.name
-                            when {
-                                name.equals("row", ignoreCase = true) || name.endsWith(":row") -> {
-                                    rowCells.clear()
-                                    val rAttr = parser.getAttributeValue(null, "r")
-                                    currentRowNum = rAttr?.toIntOrNull() ?: (currentRowNum + 1)
-                                }
-                                name.equals("c", ignoreCase = true) || name.endsWith(":c") -> {
-                                    insideCell = true
-                                    currentCellType = parser.getAttributeValue(null, "t")
-                                    cellTextBuffer.setLength(0)
-                                }
-                                insideCell && (name.equals("is", ignoreCase = true) || name.endsWith(":is")) -> {
-                                    insideIs = true
-                                }
-                                insideCell && (name.equals("t", ignoreCase = true) || name.endsWith(":t")) -> {
-                                    val text = parser.nextText()
-                                    cellTextBuffer.append(text)
-                                }
-                                insideCell && !insideIs && (name.equals("v", ignoreCase = true) || name.endsWith(":v")) -> {
-                                    val text = parser.nextText()
-                                    cellTextBuffer.append(text)
-                                }
+            var currentRowNum = 0
+            val rowCells = mutableListOf<String>()
+            var currentTargetColIndex: Int? = null
+            var currentCellType: String? = null
+            val cellTextBuffer = StringBuilder()
+            var insideCell = false
+            var insideIs = false
+
+            while (event != XmlPullParser.END_DOCUMENT) {
+                when (event) {
+                    XmlPullParser.START_TAG -> {
+                        val name = parser.name
+                        when {
+                            name.equals("row", ignoreCase = true) || name.endsWith(":row") -> {
+                                rowCells.clear()
+                                val rAttr = parser.getAttributeValue(null, "r")
+                                currentRowNum = rAttr?.toIntOrNull() ?: (currentRowNum + 1)
                             }
-                        }
-                        XmlPullParser.END_TAG -> {
-                            val name = parser.name
-                            when {
-                                name.equals("c", ignoreCase = true) || name.endsWith(":c") -> {
-                                    insideCell = false
-                                    insideIs = false
-                                    val rawVal = cellTextBuffer.toString().trim()
-                                    if (rawVal.isNotEmpty()) {
-                                        val resolvedVal = if (currentCellType == "s") {
-                                            val idx = rawVal.toIntOrNull()
-                                            if (idx != null && idx in 0 until sharedStrings.size) {
-                                                sharedStrings[idx]
-                                            } else {
-                                                rawVal
-                                            }
-                                        } else {
-                                            rawVal
-                                        }
-
-                                        if (resolvedVal.isNotBlank()) {
-                                            rowCells.add(resolvedVal)
-                                        }
-                                    }
-                                    cellTextBuffer.setLength(0)
-                                    currentCellType = null
-                                }
-                                name.equals("row", ignoreCase = true) || name.endsWith(":row") -> {
-                                    if (rowCells.isNotEmpty()) {
-                                        val rowText = rowCells.joinToString(" | ")
-                                        val normalized = ArabicNormalizer.normalize(rowText)
-                                        if (normalized.isNotEmpty()) {
-                                            onSegmentFound(
-                                                FileSegment(
-                                                    fileUri = fileUri,
-                                                    fileName = fileName,
-                                                    location = "ورقة: $sheetName، صف: $currentRowNum",
-                                                    content = rowText,
-                                                    normalizedContent = normalized
-                                                )
-                                            )
-                                        }
-                                    }
-                                    rowCells.clear()
-                                }
+                            name.equals("c", ignoreCase = true) || name.endsWith(":c") -> {
+                                insideCell = true
+                                val rAttr = parser.getAttributeValue(null, "r")
+                                currentTargetColIndex = extractColumnIndexFromRef(rAttr)
+                                currentCellType = parser.getAttributeValue(null, "t")
+                                cellTextBuffer.setLength(0)
+                            }
+                            insideCell && (name.equals("is", ignoreCase = true) || name.endsWith(":is")) -> {
+                                insideIs = true
+                            }
+                            insideCell && (name.equals("t", ignoreCase = true) || name.endsWith(":t")) -> {
+                                val text = parser.nextText()
+                                cellTextBuffer.append(text)
+                            }
+                            insideCell && !insideIs && (name.equals("v", ignoreCase = true) || name.endsWith(":v")) -> {
+                                val text = parser.nextText()
+                                cellTextBuffer.append(text)
                             }
                         }
                     }
-                    event = parser.next()
+                    XmlPullParser.END_TAG -> {
+                        val name = parser.name
+                        when {
+                            name.equals("c", ignoreCase = true) || name.endsWith(":c") -> {
+                                insideCell = false
+                                insideIs = false
+                                val rawVal = cellTextBuffer.toString()
+                                val resolvedVal = if (currentCellType == "s") {
+                                    val idx = rawVal.trim().toIntOrNull()
+                                    if (idx != null && idx in 0 until sharedStrings.size) {
+                                        sharedStrings[idx]
+                                    } else {
+                                        rawVal
+                                    }
+                                } else {
+                                    rawVal
+                                }
+
+                                // Clean any internal newlines or tabs to protect table formatting
+                                val cleanedVal = resolvedVal.replace("[\t\r\n]+".toRegex(), " ").trim()
+
+                                val colIndex = currentTargetColIndex ?: rowCells.size
+                                while (rowCells.size < colIndex) {
+                                    rowCells.add("")
+                                }
+                                if (rowCells.size == colIndex) {
+                                    rowCells.add(cleanedVal)
+                                } else {
+                                    rowCells[colIndex] = cleanedVal
+                                }
+
+                                cellTextBuffer.setLength(0)
+                                currentCellType = null
+                                currentTargetColIndex = null
+                            }
+                            name.equals("row", ignoreCase = true) || name.endsWith(":row") -> {
+                                // Strip trailing empty cells only
+                                while (rowCells.isNotEmpty() && rowCells.last().isEmpty()) {
+                                    rowCells.removeAt(rowCells.size - 1)
+                                }
+
+                                if (rowCells.any { it.isNotEmpty() }) {
+                                    if (candidateHeaderRows.size < 5) {
+                                        candidateHeaderRows.add(rowCells.toList())
+                                    }
+
+                                    val rowText = rowCells.joinToString("\t")
+                                    val normalized = ArabicNormalizer.normalize(rowText)
+                                    if (normalized.isNotEmpty()) {
+                                        onSegmentFound(
+                                            FileSegment(
+                                                fileUri = fileUri,
+                                                fileName = fileName,
+                                                location = "ورقة: $sheetName، صف: $currentRowNum",
+                                                content = rowText,
+                                                normalizedContent = normalized
+                                            )
+                                        )
+                                    }
+                                }
+                                rowCells.clear()
+                            }
+                        }
+                    }
                 }
+                event = parser.next()
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error parsing sheet ${sheetEntry.name}", e)
+        }
+
+        // Determine true column headers from the first candidate rows
+        val headers = selectSheetHeaders(candidateHeaderRows)
+        if (headers.isNotEmpty()) {
+            onHeaderFound(sheetName, headers)
         }
     }
 }

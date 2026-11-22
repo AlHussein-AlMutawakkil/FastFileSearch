@@ -1,6 +1,5 @@
 package com.example.fastfilesearch.ui
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,55 +8,28 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.TableChart
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -67,10 +39,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -83,39 +52,24 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
-import com.example.fastfilesearch.model.SearchResult
-import com.example.fastfilesearch.parser.FileParserDispatcher
+import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
+import com.example.fastfilesearch.ui.components.FileResultGroup
+import com.example.fastfilesearch.ui.components.NoResultsPrompt
+import com.example.fastfilesearch.ui.components.OfficialExcelTableCard
+import com.example.fastfilesearch.ui.components.ReadyToSearchPrompt
+import com.example.fastfilesearch.ui.components.SettingsDialog
+import com.example.fastfilesearch.ui.components.WordPdfGroupedCard
 import kotlinx.coroutines.launch
-
-data class FileResultGroup(
-    val fileUri: String,
-    val fileName: String,
-    val isDocument: Boolean,
-    val results: List<SearchResult>
-)
-
-// Official Microsoft Excel Colors
-private val ExcelDarkGreen = Color(0xFF107C41)
-private val ExcelHeaderGray = Color(0xFFF3F2F1)
-private val ExcelGridLine = Color(0xFFD4D4D4)
-private val ExcelHeaderBorder = Color(0xFFC8C6C4)
-private val ExcelHeaderText = Color(0xFF505050)
-private val ExcelSelectedBg = Color(0xFFE8F5E9)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,18 +97,7 @@ fun SearchScreen(
         }
     }
 
-    // Settings Modal Dialog
-    if (showSettingsDialog) {
-        SettingsDialog(
-            uiState = uiState,
-            onSelectFolderClick = onSelectFolderClick,
-            onRefreshClick = onRefreshClick,
-            onToggleStretchSingleColumn = onToggleStretchSingleColumn,
-            onDismiss = { showSettingsDialog = false }
-        )
-    }
-
-    // Group results by file URI: Word/PDF use Method #1 (Grouped), Excel/Text use Method #4 (Official Excel Grid)
+    // Group results by file URI: Word/PDF use Grouped Card, Excel/Text use Official Excel Grid
     val groupedResults = remember(uiState.searchResults) {
         uiState.searchResults
             .groupBy { it.fileUri }
@@ -170,6 +113,17 @@ fun SearchScreen(
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        // Settings Modal Dialog wrapped in RTL Provider to ensure correct layout direction on all devices
+        if (showSettingsDialog) {
+            SettingsDialog(
+                uiState = uiState,
+                onSelectFolderClick = onSelectFolderClick,
+                onRefreshClick = onRefreshClick,
+                onToggleStretchSingleColumn = onToggleStretchSingleColumn,
+                onDismiss = { showSettingsDialog = false }
+            )
+        }
+
         Scaffold(
             modifier = modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -226,7 +180,7 @@ fun SearchScreen(
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "تحديث الفهرس",
-                                    modifier = Modifier.rotate(rotation),
+                                    modifier = Modifier.graphicsLayer { rotationZ = rotation },
                                     tint = if (uiState.folderUri != null && !isIndexing)
                                         MaterialTheme.colorScheme.primary
                                     else
@@ -346,9 +300,7 @@ fun SearchScreen(
                             ReadyToSearchPrompt(
                                 folderName = uiState.folderName,
                                 filesCount = uiState.filesCount,
-                                segmentsCount = uiState.segmentsCount,
-                                onRefreshClick = onRefreshClick,
-                                isIndexing = uiState.indexProgress.isIndexing
+                                segmentsCount = uiState.segmentsCount
                             )
                         }
                     }
@@ -385,7 +337,7 @@ fun SearchScreen(
                                 key = { it.fileUri }
                             ) { group ->
                                 if (group.isDocument) {
-                                    // Method #1: Grouped Card for Word (.docx) & PDF (.pdf) with padding
+                                    // Grouped Card for Word (.docx) & PDF (.pdf) with padding
                                     Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                                         WordPdfGroupedCard(
                                             group = group,
@@ -399,7 +351,7 @@ fun SearchScreen(
                                         )
                                     }
                                 } else {
-                                    // Method #4: Pure flat data table replica matching screenshot (Edge-to-Edge)
+                                    // Flat data table replica (Edge-to-Edge)
                                     OfficialExcelTableCard(
                                         group = group,
                                         stretchSingleColumn = uiState.stretchSingleColumn,
@@ -419,905 +371,4 @@ fun SearchScreen(
             }
         }
     }
-}
-
-/**
- * Method #1: Grouped Document Card for Word (.docx) & PDF (.pdf).
- */
-@Composable
-fun WordPdfGroupedCard(
-    group: FileResultGroup,
-    onOpenFile: () -> Unit,
-    onCopySnippet: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val visual = FileTypeHelper.getVisual(group.fileName)
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Document Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenFile)
-                    .background(visual.color.copy(alpha = 0.08f))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(visual.color),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = visual.icon,
-                        contentDescription = visual.typeName,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = group.fileName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${group.results.size} مطابقة في هذا المستند",
-                        fontSize = 12.sp,
-                        color = visual.color,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                IconButton(
-                    onClick = onOpenFile,
-                    modifier = Modifier.size(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "فتح الملف",
-                        tint = visual.color,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            HorizontalDivider(color = visual.color.copy(alpha = 0.2f), thickness = 1.dp)
-
-            // Document Snippets List
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                group.results.forEach { result ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                            .clickable(onClick = onOpenFile)
-                            .padding(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(visual.color.copy(alpha = 0.12f))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    tint = visual.color,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = result.location,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = visual.color
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { onCopySnippet(result.snippet) },
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "نسخ الفقرة",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        val highlightedSnippet = remember(result.snippet, result.query) {
-                            TextHighlighter.highlight(result.snippet, result.query)
-                        }
-
-                        Text(
-                            text = highlightedSnippet,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * Exact replica of the data table screen from the user's reference:
- * - Edge-to-edge dark table layout without any bulky cards, shadows, or outer paddings.
- * - Top header bar with file type icon, file name, and NO search/refresh icons.
- * - Table column header with ≡ menu icon above row numbers and "عمود 1", "عمود 2", "عمود 3"...
- * - Dark theme grid with row numbers on the side.
- * - Dropdown menu on row number click containing ONLY "نسخ" and "مشاركة".
- */
-@Composable
-fun OfficialExcelTableCard(
-    group: FileResultGroup,
-    stretchSingleColumn: Boolean = true,
-    onOpenFile: () -> Unit,
-    onCopyRow: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
-
-    // Multi-sheet support
-    val sheetGroups = remember(group.results) {
-        group.results.groupBy { result ->
-            extractSheetAndRow(result.location).first
-        }
-    }
-
-    val onShareRow: (String) -> Unit = remember(context) {
-        { text ->
-            try {
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    putExtra(Intent.EXTRA_TEXT, text)
-                    type = "text/plain"
-                }
-                val shareIntent = Intent.createChooser(sendIntent, "مشاركة بيانات الصف")
-                context.startActivity(shareIntent)
-            } catch (e: Exception) {
-                // Ignore fallback
-            }
-        }
-    }
-
-    // Colors matching the dark screenshot exactly
-    val topBarBg = Color(0xFF1C1F23)
-    val colHeaderBg = Color(0xFF22262B)
-    val tableBg = Color(0xFF131518)
-    val rowAltBg = Color(0xFF16191D)
-    val rowNumBg = Color(0xFF1B1E22)
-    val gridBorderColor = Color(0xFF2D3137)
-    val headerBorderColor = Color(0xFF33383F)
-    val headerTextColor = Color(0xFFB5B9BF)
-    val cellTextColor = Color(0xFFE4E7EB)
-    val matchBg = Color(0xFF1A3822)
-    val matchBorder = Color(0xFF388E3C)
-    val popupBg = Color(0xFF202328)
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(tableBg)
-    ) {
-        // 1. Top Bar matching the screenshot: File type icon on right, file name, and Open File button on left
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(topBarBg)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Icon representing the file type
-            Icon(
-                imageVector = visual.icon,
-                contentDescription = visual.typeName,
-                tint = visual.color,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            // File Name in place of "جدول سريع"
-            Text(
-                text = group.fileName,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Matches Count Badge
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = Color.White.copy(alpha = 0.12f)
-            ) {
-                Text(
-                    text = "${group.results.size} صف",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // Open File Button on the left (بدل زر البحث السابق في الصورة كما طلب المستخدم)
-            IconButton(
-                onClick = onOpenFile,
-                modifier = Modifier.size(34.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                    contentDescription = "فتح الملف",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        HorizontalDivider(color = gridBorderColor, thickness = 1.dp)
-
-        // 2. Render Sheet Tables (Flat and direct)
-        sheetGroups.forEach { (sheetName, sheetResults) ->
-            val rowsData = remember(sheetResults) {
-                sheetResults.map { res ->
-                    val (_, rowNum) = extractSheetAndRow(res.location)
-                    val cells = TableCellHelper.splitIntoCells(res.snippet)
-                    Triple(rowNum, cells, res)
-                }
-            }
-            val maxCols = remember(rowsData) {
-                rowsData.maxOfOrNull { it.second.size }?.coerceAtLeast(1) ?: 1
-            }
-
-            // Sheet Name Strip if more than 1 sheet
-            if (sheetGroups.size > 1 || sheetName != "ورقة 1") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF181B1F))
-                        .padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF107C41))
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = sheetName,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = headerTextColor
-                    )
-                }
-                HorizontalDivider(color = gridBorderColor, thickness = 0.5.dp)
-            }
-
-            // State for which row number's DropdownMenu is open
-            var menuExpandedRowIndex by remember { mutableStateOf<Int?>(null) }
-
-            // 3. Exact Data Grid with Auto-fit Column Widths and Equal Row Height
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val totalWidth = maxWidth
-                val rowNumWidth = 44.dp
-                val remainingWidth = if (totalWidth > rowNumWidth) totalWidth - rowNumWidth else 0.dp
-
-                // Calculate width for each column dynamically based on its longest content & words
-                val columnWidths = remember(rowsData, maxCols, remainingWidth, stretchSingleColumn) {
-                    val baseWidths = (0 until maxCols).map { colIndex ->
-                        val maxChars = rowsData.maxOfOrNull {
-                            it.second.getOrNull(colIndex)?.trim()?.length ?: 0
-                        } ?: 0
-
-                        val maxWordLength = rowsData.maxOfOrNull { row ->
-                            val text = row.second.getOrNull(colIndex) ?: ""
-                            text.split("\\s+".toRegex()).maxOfOrNull { it.length } ?: 0
-                        } ?: 0
-
-                        // Numbers/codes: ~80.dp - 95.dp
-                        // Descriptions: ~170.dp - 210.dp
-                        // Full names: ~220.dp - 280.dp
-                        val estimatedDp = (maxChars * 9f + maxWordLength * 4f + 36).dp
-                        estimatedDp.coerceIn(80.dp, 280.dp)
-                    }
-
-                    val totalBaseWidth = baseWidths.fold(0.dp) { acc, dp -> acc + dp }
-                    if (maxCols == 1 && stretchSingleColumn) {
-                        // Expand to 100% of the screen width!
-                        listOf(remainingWidth)
-                    } else if (totalBaseWidth < remainingWidth && totalBaseWidth > 0.dp && maxCols > 1) {
-                        val ratio = remainingWidth.value / totalBaseWidth.value
-                        baseWidths.map { (it.value * ratio).dp }
-                    } else {
-                        // Content width like Excel
-                        baseWidths
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                ) {
-                    Column(modifier = Modifier.width(IntrinsicSize.Max)) {
-                        // Column Header Row: [≡] | [عمود 1] | [عمود 2] | [عمود 3] | ...
-                        Row(
-                            modifier = Modifier
-                                .background(colHeaderBg)
-                                .border(0.5.dp, headerBorderColor)
-                        ) {
-                            // Right Corner: [≡] Menu icon above row numbers (matching screenshot)
-                            Box(
-                                modifier = Modifier
-                                    .width(rowNumWidth)
-                                    .height(38.dp)
-                                    .border(0.5.dp, headerBorderColor)
-                                    .background(colHeaderBg),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "قائمة",
-                                    tint = headerTextColor,
-                                    modifier = Modifier.size(19.dp)
-                                )
-                            }
-
-                            // Column Titles: with tailored auto-width per column
-                            for (colIndex in 0 until maxCols) {
-                                val colW = columnWidths.getOrElse(colIndex) { 110.dp }
-                                Box(
-                                    modifier = Modifier
-                                        .width(colW)
-                                        .height(38.dp)
-                                        .border(0.5.dp, headerBorderColor)
-                                        .background(colHeaderBg)
-                                        .padding(horizontal = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "عمود ${colIndex + 1}",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = headerTextColor,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        }
-
-                        // Data Rows: Height expands to match the tallest cell in each row!
-                        rowsData.forEachIndexed { index, (rowNum, cells, result) ->
-                            val isEven = index % 2 == 0
-                            val rowBg = if (isEven) tableBg else rowAltBg
-
-                            Row(
-                                modifier = Modifier
-                                    .background(rowBg)
-                                    .height(IntrinsicSize.Min),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Row Number Cell: fillMaxHeight() so it matches the tallest cell
-                                Box(
-                                    modifier = Modifier
-                                        .width(rowNumWidth)
-                                        .fillMaxHeight()
-                                        .border(0.5.dp, headerBorderColor)
-                                        .background(rowNumBg)
-                                        .clickable { menuExpandedRowIndex = index }
-                                        .padding(vertical = 8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = rowNum,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = headerTextColor,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-
-                                    // Popup Menu on Row Number click (ONLY "نسخ" and "مشاركة" as requested)
-                                    DropdownMenu(
-                                        expanded = menuExpandedRowIndex == index,
-                                        onDismissRequest = { menuExpandedRowIndex = null },
-                                        modifier = Modifier
-                                            .background(popupBg)
-                                            .border(0.5.dp, gridBorderColor, RoundedCornerShape(8.dp))
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = "نسخ",
-                                                    color = Color.White,
-                                                    fontSize = 14.sp
-                                                )
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.ContentCopy,
-                                                    contentDescription = "نسخ",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                onCopyRow(result.snippet)
-                                                menuExpandedRowIndex = null
-                                            }
-                                        )
-                                        HorizontalDivider(color = gridBorderColor, thickness = 0.5.dp)
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = "مشاركة",
-                                                    color = Color.White,
-                                                    fontSize = 14.sp
-                                                )
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Share,
-                                                    contentDescription = "مشاركة",
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                onShareRow(result.snippet)
-                                                menuExpandedRowIndex = null
-                                            }
-                                        )
-                                    }
-                                }
-
-                                // Data Cells: fillMaxHeight() so every cell in the row has identical height
-                                for (colIndex in 0 until maxCols) {
-                                    val colW = columnWidths.getOrElse(colIndex) { 110.dp }
-                                    val cellText = cells.getOrNull(colIndex) ?: ""
-                                    val isMatch = remember(cellText, result.query) {
-                                        TableCellHelper.isCellMatching(cellText, result.query)
-                                    }
-                                    val highlightedCellText = remember(cellText, result.query) {
-                                        TextHighlighter.highlight(cellText, result.query)
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .width(colW)
-                                            .fillMaxHeight()
-                                            .background(if (isMatch) matchBg else Color.Transparent)
-                                            .border(
-                                                width = if (isMatch) 1.5.dp else 0.5.dp,
-                                                color = if (isMatch) matchBorder else gridBorderColor,
-                                                shape = RectangleShape
-                                            )
-                                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = highlightedCellText,
-                                            fontSize = 13.sp,
-                                            color = cellTextColor,
-                                            fontWeight = if (isMatch) FontWeight.Bold else FontWeight.Normal,
-                                            lineHeight = 18.sp,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            HorizontalDivider(color = gridBorderColor, thickness = 1.dp)
-        }
-    }
-}
-
-/**
- * Extracts sheet name and row number from location string.
- */
-private fun extractSheetAndRow(location: String): Pair<String, String> {
-    var sheet = "ورقة 1"
-    var row = "1"
-
-    if (location.contains("ورقة:")) {
-        val parts = location.split("،")
-        sheet = parts.getOrNull(0)?.substringAfter("ورقة:")?.trim() ?: "ورقة 1"
-        row = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim() ?: "1"
-    } else if (location.contains("سطر")) {
-        sheet = "بيانات جدولية"
-        row = location.replace("سطر", "").replace(":", "").trim()
-    } else {
-        row = location.filter { it.isDigit() }.ifEmpty { "1" }
-    }
-
-    return Pair(sheet, row)
-}
-
-/**
- * Returns Excel column letters: 0 -> A, 1 -> B, 25 -> Z, 26 -> AA, 27 -> AB...
- */
-private fun getExcelColumnLetter(index: Int): String {
-    var n = index
-    val sb = StringBuilder()
-    while (n >= 0) {
-        sb.insert(0, ('A'.code + (n % 26)).toChar())
-        n = n / 26 - 1
-    }
-    return sb.toString()
-}
-
-@Composable
-fun EmptyFolderPrompt(
-    onSelectFolderClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(44.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-            text = "اختر مجلداً للبدء",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "قم بتحديد المجلد الذي يحتوي على مستنداتك وسيقوم التطبيق بفهرستها ومزامنتها تلقائياً للبحث الفوري دون إنترنت.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        FilledTonalButton(
-            onClick = onSelectFolderClick,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(imageVector = Icons.Default.FolderOpen, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text = "تحديد مجلد المستندات", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun ReadyToSearchPrompt(
-    folderName: String,
-    filesCount: Int,
-    segmentsCount: Int,
-    onRefreshClick: () -> Unit,
-    isIndexing: Boolean,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.secondaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(38.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "جاهز للبحث الفوري",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "المجلد الحالي: $folderName\nتمت فهرسة $filesCount ملف بنجاح ($segmentsCount مقطع جاهز)",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Supported Formats Pills
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FormatBadge(name = "Excel (جداول رسمية)", color = ExcelDarkGreen)
-            FormatBadge(name = "Word (تجميعي)", color = Color(0xFF185ABD))
-            FormatBadge(name = "PDF (تجميعي)", color = Color(0xFFD32F2F))
-            FormatBadge(name = "نصوص وجداول", color = Color(0xFFE65100))
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "يدعم البحث الفوري بجميع صيغ الحروف العربية (أ/إ/آ، ة/ه، ى/ي) ومع أو بدون التشكيل.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun FormatBadge(name: String, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = color.copy(alpha = 0.12f)
-    ) {
-        Text(
-            text = name,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-fun NoResultsPrompt(
-    query: String,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.SearchOff,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(60.dp)
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "لم يتم العثور على نتائج",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "لا توجد أي مطابقة للكلمة \"$query\" داخل الملفات المفهرسة.\nجرب كلمة أخرى أو تأكد من مزامنة المجلد.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-/**
- * Settings Dialog for folder management and table display preferences.
- */
-@Composable
-fun SettingsDialog(
-    uiState: SearchUiState,
-    onSelectFolderClick: () -> Unit,
-    onRefreshClick: () -> Unit,
-    onToggleStretchSingleColumn: (Boolean) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = "الإعدادات",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Section 1: Folder Selection & Management
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "مجلد البحث المفهرس",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = if (uiState.folderName.isNotBlank())
-                            "المجلد الحالي: ${uiState.folderName} (${uiState.filesCount} ملف مفهرس)"
-                        else
-                            "لم يتم اختيار مجلد بعد",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilledTonalButton(
-                            onClick = {
-                                onDismiss()
-                                onSelectFolderClick()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FolderOpen,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "تغيير المجلد", fontSize = 12.sp)
-                        }
-
-                        if (uiState.folderUri != null) {
-                            FilledTonalButton(
-                                onClick = {
-                                    onRefreshClick()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
-                // Section 2: Single Column Files Stretch Toggle
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "تمديد الملفات ذات العمود الواحد (مثل txt)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = if (uiState.stretchSingleColumn)
-                                    "مفعل: يتمدد لملء 100% من عرض الشاشة"
-                                else
-                                    "معطل: العرض حسب طول المحتوى مع التمرير كالإكسل",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Switch(
-                            checked = uiState.stretchSingleColumn,
-                            onCheckedChange = { onToggleStretchSingleColumn(it) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إغلاق", fontWeight = FontWeight.Bold)
-            }
-        }
-    )
 }

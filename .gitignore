@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+PROJECT_SNAPSHOT.md
+generate_snapshot.py

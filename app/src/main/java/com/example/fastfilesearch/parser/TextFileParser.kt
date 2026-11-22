@@ -11,6 +11,7 @@ object TextFileParser {
 
     /**
      * Extracts text from plain text files (TXT, CSV, JSON, MD, LOG) line-by-line using UTF-8.
+     * Strips BOM (\uFEFF) if present at the beginning of the first line.
      */
     fun parse(
         inputStream: InputStream,
@@ -20,7 +21,8 @@ object TextFileParser {
     ) {
         BufferedReader(InputStreamReader(inputStream, StandardCharsets.UTF_8)).useLines { lines ->
             lines.forEachIndexed { index, line ->
-                val trimmed = line.trim()
+                val lineWithoutBom = if (index == 0) line.removePrefix("\uFEFF") else line
+                val trimmed = lineWithoutBom.trim()
                 if (trimmed.isNotEmpty()) {
                     val normalized = ArabicNormalizer.normalize(trimmed)
                     if (normalized.isNotEmpty()) {

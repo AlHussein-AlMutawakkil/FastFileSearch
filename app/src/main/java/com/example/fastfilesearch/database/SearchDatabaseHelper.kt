@@ -21,8 +21,8 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
     companion object {
         private const val TAG = "SearchDatabaseHelper"
         private const val DATABASE_NAME = "fast_file_search.db"
-        // Upgraded to version 2 for universal FTS compatibility across all Android OEMs
-        private const val DATABASE_VERSION = 2
+        // Upgraded to version 3 for WAL mode, sheet_headers table, and Arabic filename indexing
+        private const val DATABASE_VERSION = 3
 
         private const val TABLE_FILES = "indexed_files"
         private const val COL_FILE_URI = "file_uri"
@@ -31,6 +31,11 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         private const val COL_FILE_SIZE = "file_size"
         private const val COL_LAST_MODIFIED = "last_modified"
         private const val COL_INDEXED_AT = "indexed_at"
+
+        private const val TABLE_SHEET_HEADERS = "sheet_headers"
+        private const val COL_SH_FILE_URI = "file_uri"
+        private const val COL_SH_SHEET_NAME = "sheet_name"
+        private const val COL_SH_HEADERS_TEXT = "headers_text"
 
         private const val TABLE_FTS = "file_segments_fts"
         private const val FTS_COL_URI = "file_uri"
@@ -52,6 +57,15 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
     @Volatile
     private var isUsingFts5: Boolean? = null
 
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        try {
+            db.enableWriteAheadLogging()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to enable write-ahead logging (WAL)", e)
+        }
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         createTables(db)
     }
@@ -61,6 +75,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         try {
             db.execSQL("DROP TABLE IF EXISTS $TABLE_FILES")
             db.execSQL("DROP TABLE IF EXISTS $TABLE_FTS")
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_SHEET_HEADERS")
         } catch (e: Exception) {
             Log.e(TAG, "Error dropping tables during upgrade", e)
         }
@@ -82,9 +97,19 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             """.trimIndent()
         )
 
-        // 2. Determine FTS module availability
-        // Some Android OEM builds (e.g., Samsung on Android 10) omit FTS5 compile flag.
-        // FTS4 is universally supported on 100% of Android devices.
+        // 2. Sheet headers table
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS $TABLE_SHEET_HEADERS (
+                $COL_SH_FILE_URI TEXT NOT NULL,
+                $COL_SH_SHEET_NAME TEXT NOT NULL,
+                $COL_SH_HEADERS_TEXT TEXT,
+                PRIMARY KEY ($COL_SH_FILE_URI, $COL_SH_SHEET_NAME)
+            );
+            """.trimIndent()
+        )
+
+        // 3. Determine FTS module availability
         val fts5Available = probeFts5(db)
 
         if (fts5Available) {
@@ -217,7 +242,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
     }
 
     /**
-     * Removes all indexing records and segments for a specific file URI.
+     * Removes all indexing records, segments, and sheet headers for a specific file URI.
      */
     fun deleteFileIndex(fileUri: String) {
         val db = writableDatabase
@@ -225,6 +250,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         try {
             db.delete(TABLE_FILES, "$COL_FILE_URI = ?", arrayOf(fileUri))
             db.delete(TABLE_FTS, "$FTS_COL_URI = ?", arrayOf(fileUri))
+            db.delete(TABLE_SHEET_HEADERS, "$COL_SH_FILE_URI = ?", arrayOf(fileUri))
             db.setTransactionSuccessful()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete file index for $fileUri", e)
@@ -234,16 +260,23 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
     }
 
     /**
-     * Saves a file record and batch-inserts all its extracted segments in a single fast transaction.
+     * Saves a file record and batch-inserts all its extracted segments and sheet headers in a single fast transaction.
+     * Normalized filename is indexed along with segment contents so that Arabic queries match filenames uniformly.
      */
-    fun saveFileAndSegments(record: IndexedFileRecord, segments: List<FileSegment>) {
+    fun saveFileAndSegments(
+        record: IndexedFileRecord,
+        segments: List<FileSegment>,
+        sheetHeaders: Map<String, List<String>> = emptyMap()
+    ) {
         val db = writableDatabase
         db.beginTransaction()
         var statement: SQLiteStatement? = null
+        var shStatement: SQLiteStatement? = null
         try {
             // 1. Delete previous records for this file if existing
             db.delete(TABLE_FILES, "$COL_FILE_URI = ?", arrayOf(record.uri))
             db.delete(TABLE_FTS, "$FTS_COL_URI = ?", arrayOf(record.uri))
+            db.delete(TABLE_SHEET_HEADERS, "$COL_SH_FILE_URI = ?", arrayOf(record.uri))
 
             // 2. Insert into indexed_files
             val cv = ContentValues().apply {
@@ -256,23 +289,56 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             }
             db.insertWithOnConflict(TABLE_FILES, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
 
-            // 3. Batch insert segments into FTS
-            if (segments.isNotEmpty()) {
-                val insertSql = """
-                    INSERT INTO $TABLE_FTS ($FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT, $FTS_COL_NORMALIZED)
-                    VALUES (?, ?, ?, ?, ?)
+            // 3. Insert sheet headers
+            if (sheetHeaders.isNotEmpty()) {
+                val shInsertSql = """
+                    INSERT OR REPLACE INTO $TABLE_SHEET_HEADERS ($COL_SH_FILE_URI, $COL_SH_SHEET_NAME, $COL_SH_HEADERS_TEXT)
+                    VALUES (?, ?, ?)
                 """.trimIndent()
-                statement = db.compileStatement(insertSql)
+                shStatement = db.compileStatement(shInsertSql)
+                for ((sheetName, headersList) in sheetHeaders) {
+                    shStatement.clearBindings()
+                    shStatement.bindString(1, record.uri)
+                    shStatement.bindString(2, sheetName)
+                    shStatement.bindString(3, headersList.joinToString("\t"))
+                    shStatement.executeInsert()
+                }
+            }
 
+            // 4. Batch insert segments into FTS
+            val normalizedFileName = ArabicNormalizer.normalize(record.fileName)
+            val insertSql = """
+                INSERT INTO $TABLE_FTS ($FTS_COL_URI, $FTS_COL_NAME, $FTS_COL_LOCATION, $FTS_COL_CONTENT, $FTS_COL_NORMALIZED)
+                VALUES (?, ?, ?, ?, ?)
+            """.trimIndent()
+            statement = db.compileStatement(insertSql)
+
+            if (segments.isNotEmpty()) {
                 for (segment in segments) {
                     statement.clearBindings()
                     statement.bindString(1, segment.fileUri)
                     statement.bindString(2, segment.fileName)
                     statement.bindString(3, segment.location)
                     statement.bindString(4, segment.content)
-                    statement.bindString(5, segment.normalizedContent)
+
+                    // Normalize filename inside normalized_content so Arabic search matches filenames
+                    val combinedNormalized = if (normalizedFileName.isNotEmpty()) {
+                        "$normalizedFileName ${segment.normalizedContent}"
+                    } else {
+                        segment.normalizedContent
+                    }
+                    statement.bindString(5, combinedNormalized)
                     statement.executeInsert()
                 }
+            } else {
+                // File with 0 segments (e.g. empty document): insert file record segment
+                statement.clearBindings()
+                statement.bindString(1, record.uri)
+                statement.bindString(2, record.fileName)
+                statement.bindString(3, "ملف")
+                statement.bindString(4, record.fileName)
+                statement.bindString(5, normalizedFileName)
+                statement.executeInsert()
             }
 
             db.setTransactionSuccessful()
@@ -280,13 +346,106 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             Log.e(TAG, "Failed to save file and segments for ${record.fileName}", e)
         } finally {
             statement?.close()
+            shStatement?.close()
             db.endTransaction()
+        }
+    }
+
+    private data class SearchHit(
+        val id: Long,
+        val fileUri: String,
+        val fileName: String,
+        val location: String,
+        val content: String
+    )
+
+    private fun parseSheetAndRow(location: String): Pair<String?, Int?> {
+        var sheet: String? = null
+        var row: Int? = null
+
+        if (location.contains("ورقة:")) {
+            val parts = location.split("،")
+            sheet = parts.getOrNull(0)?.substringAfter("ورقة:")?.trim()
+            val rowPart = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim()
+            row = rowPart?.toIntOrNull()
+        } else if (location.contains("سطر")) {
+            row = location.replace("سطر", "").replace(":", "").trim().toIntOrNull()
+        } else if (location.contains("فقرة")) {
+            row = location.replace("فقرة", "").trim().toIntOrNull()
+        }
+
+        return Pair(sheet, row)
+    }
+
+    private fun getSheetHeadersForFiles(
+        db: SQLiteDatabase,
+        fileUris: Set<String>
+    ): Map<Pair<String, String>, List<String>> {
+        if (fileUris.isEmpty()) return emptyMap()
+        val headersMap = mutableMapOf<Pair<String, String>, List<String>>()
+
+        fileUris.chunked(500).forEach { chunk ->
+            val placeholders = chunk.joinToString(",") { "?" }
+            val sql = """
+                SELECT $COL_SH_FILE_URI, $COL_SH_SHEET_NAME, $COL_SH_HEADERS_TEXT 
+                FROM $TABLE_SHEET_HEADERS 
+                WHERE $COL_SH_FILE_URI IN ($placeholders)
+            """.trimIndent()
+            val cursor = db.rawQuery(sql, chunk.toTypedArray())
+            cursor.use {
+                val uriIdx = it.getColumnIndexOrThrow(COL_SH_FILE_URI)
+                val sheetIdx = it.getColumnIndexOrThrow(COL_SH_SHEET_NAME)
+                val textIdx = it.getColumnIndexOrThrow(COL_SH_HEADERS_TEXT)
+
+                while (it.moveToNext()) {
+                    val uri = it.getString(uriIdx)
+                    val sheet = it.getString(sheetIdx)
+                    val text = if (it.isNull(textIdx)) "" else it.getString(textIdx)
+                    val list = if (text.isNotEmpty()) text.split("\t") else emptyList()
+                    headersMap[Pair(uri, sheet)] = list
+                }
+            }
+        }
+
+        return headersMap
+    }
+
+    private fun enrichSearchResults(
+        db: SQLiteDatabase,
+        hits: List<SearchHit>,
+        rawQuery: String
+    ): List<SearchResult> {
+        if (hits.isEmpty()) return emptyList()
+
+        val fileUris = hits.map { it.fileUri }.toSet()
+        val headersMap = getSheetHeadersForFiles(db, fileUris)
+
+        return hits.map { hit ->
+            val (sheet, row) = parseSheetAndRow(hit.location)
+            val headers = if (sheet != null) {
+                headersMap[Pair(hit.fileUri, sheet)] ?: emptyList()
+            } else {
+                emptyList()
+            }
+
+            SearchResult(
+                id = hit.id,
+                fileUri = hit.fileUri,
+                fileName = hit.fileName,
+                location = hit.location,
+                snippet = hit.content,
+                query = rawQuery.trim(),
+                sheetName = sheet,
+                rowNumber = row,
+                columnHeaders = headers
+            )
         }
     }
 
     /**
      * Executes FTS search using normalized query terms.
      * Uses BM25 ranking when FTS5 is active, or standard FTS matching when FTS4 is active.
+     * Enriches results with sheet headers from sheet_headers table and extracts sheetName and rowNumber.
      */
     fun search(rawQuery: String, limit: Int = 150): List<SearchResult> {
         val normalizedQuery = ArabicNormalizer.normalize(rawQuery)
@@ -296,13 +455,9 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         val tokens = normalizedQuery.split("[^\\p{L}\\p{Nd}]+".toRegex()).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
-        val results = mutableListOf<SearchResult>()
         val db = readableDatabase
         val fts5 = checkIsFts5(db)
 
-        // FTS syntax:
-        // For FTS5: "token"*
-        // For FTS4: token*
         val matchExpr = if (fts5) {
             tokens.joinToString(" ") { "\"$it\"*" }
         } else {
@@ -326,6 +481,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             """.trimIndent()
         }
 
+        val hits = mutableListOf<SearchHit>()
         try {
             val cursor = db.rawQuery(sql, arrayOf(matchExpr, limit.toString()))
             cursor.use {
@@ -336,18 +492,18 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
                 val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
 
                 while (it.moveToNext()) {
-                    results.add(
-                        SearchResult(
+                    hits.add(
+                        SearchHit(
                             id = it.getLong(idIdx),
                             fileUri = it.getString(uriIdx),
                             fileName = it.getString(nameIdx),
                             location = it.getString(locIdx),
-                            snippet = it.getString(contentIdx),
-                            query = rawQuery.trim()
+                            content = it.getString(contentIdx)
                         )
                     )
                 }
             }
+            return enrichSearchResults(db, hits, rawQuery)
         } catch (e: Exception) {
             Log.w(TAG, "Primary FTS query failed for expr [$matchExpr], trying simple token match", e)
             try {
@@ -360,6 +516,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
                     LIMIT ?
                 """.trimIndent()
 
+                val fallbackHits = mutableListOf<SearchHit>()
                 val cursor = db.rawQuery(fallbackSql, arrayOf(fallbackExpr, limit.toString()))
                 cursor.use {
                     val idIdx = it.getColumnIndexOrThrow("rowid")
@@ -369,28 +526,28 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
                     val contentIdx = it.getColumnIndexOrThrow(FTS_COL_CONTENT)
 
                     while (it.moveToNext()) {
-                        results.add(
-                            SearchResult(
+                        fallbackHits.add(
+                            SearchHit(
                                 id = it.getLong(idIdx),
                                 fileUri = it.getString(uriIdx),
                                 fileName = it.getString(nameIdx),
                                 location = it.getString(locIdx),
-                                snippet = it.getString(contentIdx),
-                                query = rawQuery.trim()
+                                content = it.getString(contentIdx)
                             )
                         )
                     }
                 }
+                return enrichSearchResults(db, fallbackHits, rawQuery)
             } catch (fallbackEx: Exception) {
                 Log.e(TAG, "Search fallback failed", fallbackEx)
             }
         }
 
-        return results
+        return emptyList()
     }
 
     /**
-     * Clears all indexed data.
+     * Clears all indexed data and sheet headers.
      */
     fun clearAll() {
         val db = writableDatabase
@@ -398,6 +555,7 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         try {
             db.delete(TABLE_FILES, null, null)
             db.delete(TABLE_FTS, null, null)
+            db.delete(TABLE_SHEET_HEADERS, null, null)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()

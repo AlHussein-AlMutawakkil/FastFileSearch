@@ -23,5 +23,8 @@ data class SearchResult(
     val fileName: String,
     val location: String,
     val snippet: String,
-    val query: String
+    val query: String,
+    val sheetName: String? = null,
+    val rowNumber: Int? = null,
+    val columnHeaders: List<String> = emptyList()
 )

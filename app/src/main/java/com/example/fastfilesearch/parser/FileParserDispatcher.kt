@@ -27,19 +27,21 @@ object FileParserDispatcher {
     }
 
     /**
-     * Parses the given stream based on its file extension and invokes [onSegmentFound] for every extracted segment.
+     * Parses the given stream based on its file extension and invokes [onSegmentFound] for every extracted segment,
+     * and [onHeaderFound] when sheet column headers are determined.
      */
     fun parseFile(
         context: Context,
         inputStream: InputStream,
         fileUri: String,
         fileName: String,
+        onHeaderFound: (sheetName: String, headers: List<String>) -> Unit = { _, _ -> },
         onSegmentFound: (FileSegment) -> Unit
     ) {
         val ext = getExtension(fileName)
         when (ext) {
-            "xlsx" -> ExcelXlsxParser.parse(context, inputStream, fileUri, fileName, onSegmentFound)
-            "xls" -> ExcelXlsParser.parse(inputStream, fileUri, fileName, onSegmentFound)
+            "xlsx" -> ExcelXlsxParser.parse(context, inputStream, fileUri, fileName, onHeaderFound, onSegmentFound)
+            "xls" -> ExcelXlsParser.parse(inputStream, fileUri, fileName, onHeaderFound, onSegmentFound)
             "docx" -> DocxParser.parse(inputStream, fileUri, fileName, onSegmentFound)
             "pdf" -> PdfParser.parse(context, inputStream, fileUri, fileName, onSegmentFound)
             "txt", "csv", "json", "md", "log" -> TextFileParser.parse(inputStream, fileUri, fileName, onSegmentFound)
