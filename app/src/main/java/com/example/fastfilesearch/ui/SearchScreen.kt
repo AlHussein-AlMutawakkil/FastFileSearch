@@ -266,7 +266,7 @@ fun SearchScreen(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
                         Text(
-                            text = "ابحث في محتوى الملفات (Excel, Word, PDF, نصوص)...",
+                            text = "ابحث",
                             fontSize = 14.sp
                         )
                     },
