@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,8 +45,10 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -65,7 +68,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -122,11 +127,13 @@ fun SearchScreen(
     onClearQuery: () -> Unit,
     onOpenFile: (String) -> Unit,
     onDismissMessage: () -> Unit,
+    onToggleStretchSingleColumn: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -134,6 +141,17 @@ fun SearchScreen(
             snackbarHostState.showSnackbar(msg)
             onDismissMessage()
         }
+    }
+
+    // Settings Modal Dialog
+    if (showSettingsDialog) {
+        SettingsDialog(
+            uiState = uiState,
+            onSelectFolderClick = onSelectFolderClick,
+            onRefreshClick = onRefreshClick,
+            onToggleStretchSingleColumn = onToggleStretchSingleColumn,
+            onDismiss = { showSettingsDialog = false }
+        )
     }
 
     // Group results by file URI: Word/PDF use Method #1 (Grouped), Excel/Text use Method #4 (Official Excel Grid)
@@ -177,10 +195,10 @@ fun SearchScreen(
                             }
                         },
                         navigationIcon = {
-                            IconButton(onClick = onSelectFolderClick) {
+                            IconButton(onClick = { showSettingsDialog = true }) {
                                 Icon(
-                                    imageVector = Icons.Default.FolderOpen,
-                                    contentDescription = "اختيار مجلد",
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "الإعدادات",
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -384,6 +402,7 @@ fun SearchScreen(
                                     // Method #4: Pure flat data table replica matching screenshot (Edge-to-Edge)
                                     OfficialExcelTableCard(
                                         group = group,
+                                        stretchSingleColumn = uiState.stretchSingleColumn,
                                         onOpenFile = { onOpenFile(group.fileUri) },
                                         onCopyRow = { text ->
                                             clipboardManager.setText(AnnotatedString(text))
@@ -570,6 +589,7 @@ fun WordPdfGroupedCard(
 @Composable
 fun OfficialExcelTableCard(
     group: FileResultGroup,
+    stretchSingleColumn: Boolean = true,
     onOpenFile: () -> Unit,
     onCopyRow: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -721,17 +741,42 @@ fun OfficialExcelTableCard(
             // State for which row number's DropdownMenu is open
             var menuExpandedRowIndex by remember { mutableStateOf<Int?>(null) }
 
-            // 3. Exact Data Grid with Automatic Dynamic Column Width (Edge-to-Edge)
+            // 3. Exact Data Grid with Auto-fit Column Widths and Equal Row Height
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val totalWidth = maxWidth
                 val rowNumWidth = 44.dp
                 val remainingWidth = if (totalWidth > rowNumWidth) totalWidth - rowNumWidth else 0.dp
-                val minColWidth = 110.dp
-                val totalNeededWidth = minColWidth * maxCols
-                val dynamicColWidth = if (totalNeededWidth < remainingWidth && maxCols > 0) {
-                    remainingWidth / maxCols
-                } else {
-                    minColWidth
+
+                // Calculate width for each column dynamically based on its longest content & words
+                val columnWidths = remember(rowsData, maxCols, remainingWidth, stretchSingleColumn) {
+                    val baseWidths = (0 until maxCols).map { colIndex ->
+                        val maxChars = rowsData.maxOfOrNull {
+                            it.second.getOrNull(colIndex)?.trim()?.length ?: 0
+                        } ?: 0
+
+                        val maxWordLength = rowsData.maxOfOrNull { row ->
+                            val text = row.second.getOrNull(colIndex) ?: ""
+                            text.split("\\s+".toRegex()).maxOfOrNull { it.length } ?: 0
+                        } ?: 0
+
+                        // Numbers/codes: ~80.dp - 95.dp
+                        // Descriptions: ~170.dp - 210.dp
+                        // Full names: ~220.dp - 280.dp
+                        val estimatedDp = (maxChars * 9f + maxWordLength * 4f + 36).dp
+                        estimatedDp.coerceIn(80.dp, 280.dp)
+                    }
+
+                    val totalBaseWidth = baseWidths.fold(0.dp) { acc, dp -> acc + dp }
+                    if (maxCols == 1 && stretchSingleColumn) {
+                        // Expand to 100% of the screen width!
+                        listOf(remainingWidth)
+                    } else if (totalBaseWidth < remainingWidth && totalBaseWidth > 0.dp && maxCols > 1) {
+                        val ratio = remainingWidth.value / totalBaseWidth.value
+                        baseWidths.map { (it.value * ratio).dp }
+                    } else {
+                        // Content width like Excel
+                        baseWidths
+                    }
                 }
 
                 Box(
@@ -763,11 +808,12 @@ fun OfficialExcelTableCard(
                                 )
                             }
 
-                            // Column Titles: عمود 1, عمود 2, عمود 3... with dynamic auto width
+                            // Column Titles: with tailored auto-width per column
                             for (colIndex in 0 until maxCols) {
+                                val colW = columnWidths.getOrElse(colIndex) { 110.dp }
                                 Box(
                                     modifier = Modifier
-                                        .width(dynamicColWidth)
+                                        .width(colW)
                                         .height(38.dp)
                                         .border(0.5.dp, headerBorderColor)
                                         .background(colHeaderBg)
@@ -787,24 +833,26 @@ fun OfficialExcelTableCard(
                             }
                         }
 
-                        // Data Rows (NO click on row/cell opens file - only Open File button does)
+                        // Data Rows: Height expands to match the tallest cell in each row!
                         rowsData.forEachIndexed { index, (rowNum, cells, result) ->
                             val isEven = index % 2 == 0
                             val rowBg = if (isEven) tableBg else rowAltBg
 
                             Row(
-                                modifier = Modifier.background(rowBg),
+                                modifier = Modifier
+                                    .background(rowBg)
+                                    .height(IntrinsicSize.Min),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Row Number Cell: Click opens DropdownMenu with ONLY Copy & Share
+                                // Row Number Cell: fillMaxHeight() so it matches the tallest cell
                                 Box(
                                     modifier = Modifier
                                         .width(rowNumWidth)
-                                        .height(IntrinsicSize.Min)
+                                        .fillMaxHeight()
                                         .border(0.5.dp, headerBorderColor)
                                         .background(rowNumBg)
                                         .clickable { menuExpandedRowIndex = index }
-                                        .padding(vertical = 10.dp),
+                                        .padding(vertical = 8.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -869,8 +917,9 @@ fun OfficialExcelTableCard(
                                     }
                                 }
 
-                                // Data Cells (Auto dynamic width, NO click opens file)
+                                // Data Cells: fillMaxHeight() so every cell in the row has identical height
                                 for (colIndex in 0 until maxCols) {
+                                    val colW = columnWidths.getOrElse(colIndex) { 110.dp }
                                     val cellText = cells.getOrNull(colIndex) ?: ""
                                     val isMatch = remember(cellText, result.query) {
                                         TableCellHelper.isCellMatching(cellText, result.query)
@@ -881,23 +930,24 @@ fun OfficialExcelTableCard(
 
                                     Box(
                                         modifier = Modifier
-                                            .width(dynamicColWidth)
+                                            .width(colW)
+                                            .fillMaxHeight()
                                             .background(if (isMatch) matchBg else Color.Transparent)
                                             .border(
                                                 width = if (isMatch) 1.5.dp else 0.5.dp,
                                                 color = if (isMatch) matchBorder else gridBorderColor,
                                                 shape = RectangleShape
                                             )
-                                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                                        contentAlignment = Alignment.CenterStart
+                                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Text(
                                             text = highlightedCellText,
                                             fontSize = 13.sp,
                                             color = cellTextColor,
                                             fontWeight = if (isMatch) FontWeight.Bold else FontWeight.Normal,
-                                            maxLines = 5,
-                                            overflow = TextOverflow.Ellipsis
+                                            lineHeight = 18.sp,
+                                            textAlign = TextAlign.Center
                                         )
                                     }
                                 }
@@ -1127,4 +1177,147 @@ fun NoResultsPrompt(
             textAlign = TextAlign.Center
         )
     }
+}
+
+/**
+ * Settings Dialog for folder management and table display preferences.
+ */
+@Composable
+fun SettingsDialog(
+    uiState: SearchUiState,
+    onSelectFolderClick: () -> Unit,
+    onRefreshClick: () -> Unit,
+    onToggleStretchSingleColumn: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "الإعدادات",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Section 1: Folder Selection & Management
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "مجلد البحث المفهرس",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = if (uiState.folderName.isNotBlank())
+                            "المجلد الحالي: ${uiState.folderName} (${uiState.filesCount} ملف مفهرس)"
+                        else
+                            "لم يتم اختيار مجلد بعد",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                onDismiss()
+                                onSelectFolderClick()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "تغيير المجلد", fontSize = 12.sp)
+                        }
+
+                        if (uiState.folderUri != null) {
+                            FilledTonalButton(
+                                onClick = {
+                                    onRefreshClick()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                // Section 2: Single Column Files Stretch Toggle
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "تمديد الملفات ذات العمود الواحد (مثل txt)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (uiState.stretchSingleColumn)
+                                    "مفعل: يتمدد لملء 100% من عرض الشاشة"
+                                else
+                                    "معطل: العرض حسب طول المحتوى مع التمرير كالإكسل",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Switch(
+                            checked = uiState.stretchSingleColumn,
+                            onCheckedChange = { onToggleStretchSingleColumn(it) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("إغلاق", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
 }

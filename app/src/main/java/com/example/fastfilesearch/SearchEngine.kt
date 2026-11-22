@@ -51,6 +51,7 @@ class SearchEngine(private val context: Context) {
         private const val PREFS_NAME = "fast_file_search_prefs"
         private const val KEY_FOLDER_URI = "saved_folder_uri"
         private const val KEY_FOLDER_NAME = "saved_folder_name"
+        private const val KEY_STRETCH_SINGLE_COLUMN = "stretch_single_column"
         private const val PARALLEL_WORKERS = 4
     }
 
@@ -96,6 +97,14 @@ class SearchEngine(private val context: Context) {
     fun clearSavedFolder() {
         prefs.edit().remove(KEY_FOLDER_URI).remove(KEY_FOLDER_NAME).apply()
         dbHelper.clearAll()
+    }
+
+    fun isStretchSingleColumn(): Boolean {
+        return prefs.getBoolean(KEY_STRETCH_SINGLE_COLUMN, true)
+    }
+
+    fun setStretchSingleColumn(stretch: Boolean) {
+        prefs.edit().putBoolean(KEY_STRETCH_SINGLE_COLUMN, stretch).apply()
     }
 
     /**

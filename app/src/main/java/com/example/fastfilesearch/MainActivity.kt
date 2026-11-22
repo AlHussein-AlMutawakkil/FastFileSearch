@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                         onQueryChanged = { viewModel.onQueryChanged(it) },
                         onClearQuery = { viewModel.onClearQuery() },
                         onOpenFile = { viewModel.onOpenFile(it) },
-                        onDismissMessage = { viewModel.onDismissMessage() }
+                        onDismissMessage = { viewModel.onDismissMessage() },
+                        onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) }
                     )
                 }
             }

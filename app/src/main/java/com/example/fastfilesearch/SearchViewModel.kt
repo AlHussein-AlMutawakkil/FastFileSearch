@@ -23,7 +23,8 @@ data class SearchUiState(
     val indexProgress: IndexProgress = IndexProgress(),
     val filesCount: Int = 0,
     val segmentsCount: Int = 0,
-    val userMessage: String? = null
+    val userMessage: String? = null,
+    val stretchSingleColumn: Boolean = true
 )
 
 @OptIn(FlowPreview::class)
@@ -37,17 +38,19 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val searchQueryFlow = MutableStateFlow("")
 
     init {
-        // Restore saved folder
+        // Restore saved folder & preferences
         val savedUri = searchEngine.getSavedFolderUri()
         val savedName = searchEngine.getSavedFolderName()
         val stats = searchEngine.getIndexStats()
+        val stretchPref = searchEngine.isStretchSingleColumn()
 
         _uiState.update {
             it.copy(
                 folderUri = savedUri,
                 folderName = savedName,
                 filesCount = stats.first,
-                segmentsCount = stats.second
+                segmentsCount = stats.second,
+                stretchSingleColumn = stretchPref
             )
         }
 
@@ -186,6 +189,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 it.copy(userMessage = "تعذر فتح الملف، تأكد من توفر تطبيق مناسب على الهاتف")
             }
         }
+    }
+
+    fun onToggleStretchSingleColumn(stretch: Boolean) {
+        searchEngine.setStretchSingleColumn(stretch)
+        _uiState.update { it.copy(stretchSingleColumn = stretch) }
     }
 
     fun onDismissMessage() {
