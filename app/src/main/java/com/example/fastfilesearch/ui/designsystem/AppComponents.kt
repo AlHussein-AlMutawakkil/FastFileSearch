@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
@@ -54,14 +56,15 @@ import androidx.compose.ui.unit.sp
 
 /**
  * 1) AppTopBar:
- * Flat top bar with screen background color. Title is bold (20.sp) on the right,
- * and back arrow (<) is on the left in RTL.
+ * Flat top bar with screen background color. Back arrow is on the right (Start in RTL),
+ * title follows it, and any action icons are placed on the left (End in RTL).
  */
 @Composable
 fun AppTopBar(
     title: String,
     modifier: Modifier = Modifier,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {}
 ) {
     val colors = LocalAppColors.current
 
@@ -72,36 +75,45 @@ fun AppTopBar(
                 .background(colors.screenBackground)
                 .statusBarsPadding()
                 .height(56.dp)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Title on the right (first element in RTL)
-            Text(
-                text = title,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            // Right side in RTL (Start): Back button + Title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f, fill = false)
-            )
-
-            // Back button on the left (second element in RTL)
-            if (onBack != null) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = "رجوع",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(24.dp)
-                    )
+            ) {
+                if (onBack != null) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "رجوع",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
-            } else {
-                Spacer(modifier = Modifier.size(40.dp))
+                Text(
+                    text = title,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Left side in RTL (End): Actions
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                actions()
             }
         }
     }

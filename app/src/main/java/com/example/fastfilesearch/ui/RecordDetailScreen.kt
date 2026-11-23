@@ -4,9 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -38,8 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -49,13 +54,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
-import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
-import com.example.fastfilesearch.ui.designsystem.AppSecondaryButton
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppTopBar
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.util.ValueInteractionHelper
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun RecordDetailScreen(
     data: RecordDetailData,
@@ -66,6 +70,7 @@ fun RecordDetailScreen(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
     val colors = LocalAppColors.current
 
     val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
@@ -75,6 +80,10 @@ fun RecordDetailScreen(
 
     val maxCols = maxOf(data.cells.size, data.headers.size).coerceAtLeast(1)
 
+    val formattedRecord = remember(data, verticalCopyFormat) {
+        ValueInteractionHelper.formatRow(data.cells, data.headers, vertical = verticalCopyFormat)
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             modifier = modifier
@@ -82,10 +91,47 @@ fun RecordDetailScreen(
                 .background(colors.screenBackground)
                 .navigationBarsPadding()
         ) {
-            // Top Bar
+            // Top Bar with Copy and Share on left (End in RTL)
             AppTopBar(
                 title = "تفاصيل السجل",
-                onBack = onBack
+                onBack = onBack,
+                actions = {
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(formattedRecord))
+                            Toast.makeText(context, "تم نسخ بيانات السجل", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = "نسخ السجل",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = {
+                            try {
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    putExtra(Intent.EXTRA_TEXT, formattedRecord)
+                                    type = "text/plain"
+                                }
+                                val shareIntent = Intent.createChooser(sendIntent, "مشاركة السجل")
+                                context.startActivity(shareIntent)
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = "مشاركة السجل",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             )
 
             // Sub-header Banner: File name on right, sheet/row on left
@@ -120,7 +166,7 @@ fun RecordDetailScreen(
             // Scrollable Content inside AppSectionCard
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState())
             ) {
@@ -133,38 +179,25 @@ fun RecordDetailScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                            ) {
-                                // Row header: Column name + Copy icon
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = colName,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textSecondary
-                                    )
-
-                                    if (cellValue.isNotBlank()) {
-                                        IconButton(
-                                            onClick = {
+                                    .combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            if (cellValue.isNotBlank()) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                 clipboardManager.setText(AnnotatedString(cellValue))
                                                 Toast.makeText(context, "تم نسخ $colName", Toast.LENGTH_SHORT).show()
-                                            },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.ContentCopy,
-                                                contentDescription = "نسخ $colName",
-                                                tint = colors.textSecondary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
+                                            }
                                         }
-                                    }
-                                }
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
+                                // Clean Column Name (No icon)
+                                Text(
+                                    text = colName,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textSecondary
+                                )
 
                                 Spacer(modifier = Modifier.height(4.dp))
 
@@ -303,43 +336,6 @@ fun RecordDetailScreen(
                         }
                     }
                 }
-            }
-
-            // Bottom Action Bar: Copy Record & Share
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(colors.screenBackground)
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val formattedRecord = remember(data, verticalCopyFormat) {
-                    ValueInteractionHelper.formatRow(data.cells, data.headers, vertical = verticalCopyFormat)
-                }
-
-                AppPrimaryButton(
-                    text = "نسخ السجل",
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(formattedRecord))
-                        Toast.makeText(context, "تم نسخ بيانات السجل", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-
-                AppSecondaryButton(
-                    text = "مشاركة",
-                    onClick = {
-                        try {
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                putExtra(Intent.EXTRA_TEXT, formattedRecord)
-                                type = "text/plain"
-                            }
-                            val shareIntent = Intent.createChooser(sendIntent, "مشاركة السجل")
-                            context.startActivity(shareIntent)
-                        } catch (_: Exception) {}
-                    },
-                    modifier = Modifier.weight(1f)
-                )
             }
         }
     }

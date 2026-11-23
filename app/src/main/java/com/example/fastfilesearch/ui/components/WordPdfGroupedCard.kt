@@ -1,6 +1,5 @@
 package com.example.fastfilesearch.ui.components
 
-import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -9,36 +8,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,8 +36,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +46,7 @@ import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TextHighlighter
+import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.selection.RowKey
 import com.example.fastfilesearch.ui.selection.SelectedRowData
@@ -86,37 +73,14 @@ fun WordPdfGroupedCard(
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val appColors = LocalAppColors.current
     val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
 
-    val onShareSnippet: (String) -> Unit = remember(context) {
-        { text ->
-            try {
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                    putExtra(Intent.EXTRA_TEXT, text)
-                    type = "text/plain"
-                }
-                val shareIntent = Intent.createChooser(sendIntent, "مشاركة النص")
-                context.startActivity(shareIntent)
-            } catch (_: Exception) {}
-        }
-    }
-
-    // Pagination: Respects showAllRows
-    var isExpandedAll by remember { mutableStateOf(false) }
-    val displayedResults = if (showAllRows || isExpandedAll || group.results.size <= 15) {
-        group.results
-    } else {
-        group.results.take(15)
-    }
-    val remainingCount = group.results.size - displayedResults.size
-
-    val headerBg = remember(visual.color, isDark) {
+    val topBarBg = remember(visual.color, isDark) {
         if (isDark) visual.color.copy(alpha = 0.16f) else visual.color.copy(alpha = 0.10f)
     }
-    val headerTextColor = if (isDark) Color(0xFFE4E7EB) else Color(0xFF1F2937)
+    val topBarTextColor = if (isDark) Color(0xFFE4E7EB) else Color(0xFF1F2937)
 
     // Highlight text colors matching calm tint
     val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
@@ -128,247 +92,173 @@ fun WordPdfGroupedCard(
         label = "wordPdfExpandArrow"
     )
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    var showUnifiedDialog by remember { mutableStateOf(false) }
+
+    val combinedText = remember(group.results) {
+        group.results
+            .map { it.snippet.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n\n")
+    }
+
+    val query = remember(group.results) {
+        group.results.firstOrNull()?.query ?: ""
+    }
+
+    // Unified Text Detail Dialog when clicked
+    if (showUnifiedDialog) {
+        UnifiedTextDetailDialog(
+            info = TextDetailInfo(
+                title = group.fileName,
+                subtitle = "${group.results.size} نتائج",
+                text = combinedText,
+                query = query,
+                searchFilter = searchFilter
+            ),
+            onDismissRequest = { showUnifiedDialog = false },
+            isDark = isDark
+        )
+    }
+
+    // Full-screen width Edge-to-Edge Column without rounded corners or side gaps, matching Excel layout
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(appColors.cardBackground)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Document Header with calm, file-specific tint
-            Row(
+        // Top Bar: file icon, file name, matches count badge, and collapse arrow
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(topBarBg)
+                .clickable { isCardExpanded = !isCardExpanded }
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = visual.icon,
+                contentDescription = visual.typeName,
+                tint = visual.color,
+                modifier = Modifier.size(24.dp)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Text(
+                text = group.fileName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = topBarTextColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+
+            // Matches Count Badge (numbers only)
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isCardExpanded = !isCardExpanded }
-                    .background(headerBg)
-                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .clip(CircleShape)
+                    .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(visual.color),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = visual.icon,
-                        contentDescription = visual.typeName,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
                 Text(
-                    text = group.fileName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = headerTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Matches Count Badge (numbers only, in place of open button)
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "${group.results.size}",
-                        color = if (isDark) Color(0xFFE4E7EB) else visual.color,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
-                    tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
-                    modifier = Modifier
-                        .size(19.dp)
-                        .rotate(arrowRotation)
+                    text = "${group.results.size}",
+                    color = if (isDark) Color(0xFFE4E7EB) else visual.color,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            AnimatedVisibility(
-                visible = isCardExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    HorizontalDivider(color = visual.color.copy(alpha = 0.2f), thickness = 1.dp)
+            Spacer(modifier = Modifier.width(8.dp))
 
-                    // Document Snippets List
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        displayedResults.forEachIndexed { idx, result ->
-                            var isExpanded by remember { mutableStateOf(false) }
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
+                tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
+                modifier = Modifier
+                    .size(19.dp)
+                    .rotate(arrowRotation)
+            )
+        }
 
-                            val rowKey = remember(group.fileUri, idx) {
-                                RowKey(fileUri = group.fileUri, sheetName = "مستند", rowIndex = idx)
-                            }
-                            val isSelected = selectionState.isRowSelected(rowKey)
-                            val rowData = remember(rowKey, group.fileName, result, idx) {
-                                SelectedRowData(
-                                    key = rowKey,
-                                    fileName = group.fileName,
-                                    sheetName = "مستند",
-                                    rowNumber = "${idx + 1}",
-                                    cells = emptyList(),
-                                    headers = emptyList(),
-                                    isDocument = true,
-                                    snippet = result.snippet,
-                                    location = result.location
-                                )
-                            }
+        AnimatedVisibility(
+            visible = isCardExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                HorizontalDivider(color = appColors.divider, thickness = AppDesignTokens.DividerThickness)
 
-                            val cardBg = if (isSelected) {
-                                appColors.textPrimary.copy(alpha = 0.08f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                            }
-
-                            val cardBorderModifier = if (isSelected) {
-                                Modifier.border(1.5.dp, appColors.controlActiveBackground, RoundedCornerShape(8.dp))
-                            } else {
-                                Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                            }
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(cardBg)
-                                    .then(cardBorderModifier)
-                                    .combinedClickable(
-                                        onClick = {
-                                            if (selectionState.mode == SelectionMode.ROWS) {
-                                                onToggleRowSelection?.invoke(rowData)
-                                            } else {
-                                                isExpanded = !isExpanded
-                                            }
-                                        },
-                                        onLongClick = {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onToggleRowSelection?.invoke(rowData)
-                                        }
-                                    )
-                                    .padding(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(visual.color.copy(alpha = 0.12f))
-                                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Place,
-                                            contentDescription = null,
-                                            tint = visual.color,
-                                            modifier = Modifier.size(12.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = result.location,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = visual.color
-                                        )
-                                    }
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = { onCopySnippet(result.snippet) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.ContentCopy,
-                                                contentDescription = "نسخ الفقرة",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-
-                                        IconButton(
-                                            onClick = { onShareSnippet(result.snippet) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Share,
-                                                contentDescription = "مشاركة الفقرة",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(15.dp)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(6.dp))
-
-                                val highlightedSnippet = remember(result.snippet, result.query, isDark, searchFilter) {
-                                    TextHighlighter.highlight(
-                                        text = result.snippet,
-                                        query = result.query,
-                                        method = searchFilter.method,
-                                        ignoreDiacritics = searchFilter.ignoreDiacritics,
-                                        highlightColor = highlightBg,
-                                        highlightTextColor = highlightFg
-                                    )
-                                }
-
-                                Text(
-                                    text = highlightedSnippet,
-                                    fontSize = 13.sp,
-                                    lineHeight = 19.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = if (isExpanded) Int.MAX_VALUE else 4,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        // Show more button if more than 15 paragraphs and showAllRows is false
-                        if (!showAllRows && remainingCount > 0) {
-                            TextButton(
-                                onClick = { isExpandedAll = true },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp)
-                            ) {
-                                Text(
-                                    text = "عرض المزيد (+$remainingCount فقرة)",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = visual.color
-                                )
-                            }
-                        }
+                val highlightedCombinedText = remember(combinedText, query, isDark, searchFilter) {
+                    if (query.isNotBlank() && combinedText.isNotBlank()) {
+                        TextHighlighter.highlight(
+                            text = combinedText,
+                            query = query,
+                            method = searchFilter.method,
+                            ignoreDiacritics = searchFilter.ignoreDiacritics,
+                            highlightColor = highlightBg,
+                            highlightTextColor = highlightFg
+                        )
+                    } else {
+                        AnnotatedString(combinedText)
                     }
                 }
+
+                val rowKey = remember(group.fileUri) {
+                    RowKey(fileUri = group.fileUri, sheetName = "مستند", rowIndex = 0)
+                }
+                val isSelected = selectionState.isRowSelected(rowKey)
+                val rowData = remember(rowKey, group.fileName, combinedText) {
+                    SelectedRowData(
+                        key = rowKey,
+                        fileName = group.fileName,
+                        sheetName = "مستند",
+                        rowNumber = "1",
+                        cells = emptyList(),
+                        headers = emptyList(),
+                        isDocument = true,
+                        snippet = combinedText,
+                        location = group.results.firstOrNull()?.location ?: ""
+                    )
+                }
+
+                val bodyBg = if (isSelected) {
+                    appColors.controlActiveBackground.copy(alpha = 0.12f)
+                } else {
+                    appColors.cardBackground
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(bodyBg)
+                        .combinedClickable(
+                            onClick = {
+                                if (selectionState.mode == SelectionMode.ROWS) {
+                                    onToggleRowSelection?.invoke(rowData)
+                                } else {
+                                    showUnifiedDialog = true
+                                }
+                            },
+                            onLongClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleRowSelection?.invoke(rowData)
+                            }
+                        )
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = highlightedCombinedText,
+                        fontSize = 13.sp,
+                        lineHeight = 20.sp,
+                        color = appColors.textPrimary,
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                HorizontalDivider(color = appColors.divider, thickness = AppDesignTokens.DividerThickness)
             }
         }
     }

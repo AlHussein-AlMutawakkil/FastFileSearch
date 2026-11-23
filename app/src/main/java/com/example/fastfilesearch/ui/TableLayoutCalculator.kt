@@ -44,8 +44,8 @@ object TableLayoutCalculator {
             text = longestRowNum,
             style = rowNumTextStyle
         ).size.width
-        val measuredRowNumDp = with(density) { measuredRowNumPx.toDp() } + 22.dp
-        val rowNumWidth = measuredRowNumDp.coerceIn(42.dp, 68.dp)
+        val measuredRowNumDp = with(density) { measuredRowNumPx.toDp() } + 12.dp
+        val rowNumWidth = measuredRowNumDp.coerceIn(28.dp, 58.dp)
 
         val remainingWidth = if (totalContainerWidth > rowNumWidth) {
             totalContainerWidth - rowNumWidth

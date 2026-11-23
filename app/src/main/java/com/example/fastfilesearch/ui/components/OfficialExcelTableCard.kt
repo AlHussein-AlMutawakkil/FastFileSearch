@@ -220,218 +220,19 @@ fun OfficialExcelTableCard(
         label = "cardExpandArrow"
     )
 
-    // Dialog showing full cell content on click - strictly Dialog matching AppDesignTokens
-    if (selectedCellInfo != null) {
-        val info = selectedCellInfo!!
-
-        Dialog(
+    // Unified Dialog showing full cell content on click - matching AppDesignTokens
+    selectedCellInfo?.let { info ->
+        UnifiedTextDetailDialog(
+            info = TextDetailInfo(
+                title = info.columnName,
+                subtitle = "صف ${info.rowNumber}",
+                text = info.fullText,
+                query = info.query,
+                searchFilter = searchFilter
+            ),
             onDismissRequest = { selectedCellInfo = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
-                        .background(appColors.cardBackground)
-                        .border(1.dp, appColors.divider, RoundedCornerShape(AppDesignTokens.CardCornerRadius))
-                        .padding(20.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Title: Column name + Row number
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = info.columnName,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = appColors.textPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Text(
-                                text = "صف ${info.rowNumber}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = appColors.textSecondary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider(color = appColors.divider, thickness = AppDesignTokens.DividerThickness)
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Scrollable Body with TextHighlighter
-                        val highlightedText = remember(info.fullText, info.query, isDark, searchFilter) {
-                            if (info.query.isNotBlank()) {
-                                TextHighlighter.highlight(
-                                    text = info.fullText,
-                                    query = info.query,
-                                    method = searchFilter.method,
-                                    ignoreDiacritics = searchFilter.ignoreDiacritics,
-                                    highlightColor = highlightBg,
-                                    highlightTextColor = highlightFg
-                                )
-                            } else {
-                                AnnotatedString(info.fullText)
-                            }
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = false)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            SelectionContainer {
-                                Text(
-                                    text = highlightedText,
-                                    fontSize = 14.sp,
-                                    lineHeight = 21.sp,
-                                    color = appColors.textPrimary
-                                )
-                            }
-
-                            // Interactive quick action chips (Phone, URL, Email)
-                            val phones = remember(info.fullText) { ValueInteractionHelper.extractPhoneNumbers(info.fullText) }
-                            val urls = remember(info.fullText) { ValueInteractionHelper.extractUrls(info.fullText) }
-                            val emails = remember(info.fullText) { ValueInteractionHelper.extractEmails(info.fullText) }
-
-                            if (phones.isNotEmpty() || urls.isNotEmpty() || emails.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    phones.forEach { phone ->
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(appColors.subCardBackground)
-                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    try {
-                                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
-                                                        context.startActivity(intent)
-                                                    } catch (_: Exception) {}
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Phone,
-                                                contentDescription = null,
-                                                tint = appColors.textPrimary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = phone,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = appColors.textPrimary
-                                            )
-                                        }
-                                    }
-
-                                    urls.forEach { url ->
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(appColors.subCardBackground)
-                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    try {
-                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                        context.startActivity(intent)
-                                                    } catch (_: Exception) {}
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Language,
-                                                contentDescription = null,
-                                                tint = appColors.textPrimary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = "فتح الرابط",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = appColors.textPrimary
-                                            )
-                                        }
-                                    }
-
-                                    emails.forEach { email ->
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(appColors.subCardBackground)
-                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    try {
-                                                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
-                                                        context.startActivity(intent)
-                                                    } catch (_: Exception) {}
-                                                }
-                                                .padding(horizontal = 8.dp, vertical = 5.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Email,
-                                                contentDescription = null,
-                                                tint = appColors.textPrimary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = email,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = appColors.textPrimary
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        // Bottom Buttons: Copy & Close in monochrome AppDesignTokens
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            AppPrimaryButton(
-                                text = "نسخ",
-                                onClick = {
-                                    clipboardManager.setText(AnnotatedString(info.fullText))
-                                    selectedCellInfo = null
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            AppSecondaryButton(
-                                text = "إغلاق",
-                                onClick = { selectedCellInfo = null },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
-        }
+            isDark = isDark
+        )
     }
 
     Column(
@@ -627,7 +428,7 @@ fun OfficialExcelTableCard(
                                     imageVector = Icons.Default.Menu,
                                     contentDescription = "خيارات الورقة",
                                     tint = colors.headerTextColor,
-                                    modifier = Modifier.size(19.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
 
                                 DropdownMenu(

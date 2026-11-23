@@ -13,21 +13,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -149,28 +150,21 @@ fun LockScreen(
                     .background(colors.screenBackground)
                     .statusBarsPadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 24.dp),
+                    .imePadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // App Logo and Title
-                Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
-                        .background(colors.cardBackground)
-                        .border(AppDesignTokens.DividerThickness, colors.divider, RoundedCornerShape(AppDesignTokens.CardCornerRadius)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_app_logo),
-                        contentDescription = "شعار التطبيق",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(46.dp)
-                    )
-                }
+                // App Logo (no card/container background) and Title
+                Icon(
+                    painter = painterResource(R.drawable.ic_app_logo),
+                    contentDescription = "شعار التطبيق",
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(60.dp)
+                )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
                     text = "بحث آمن",
@@ -179,7 +173,7 @@ fun LockScreen(
                     color = colors.textPrimary
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 // Passcode Section (if PASSCODE_ONLY or BOTH)
                 if (lockMode == AppLockMode.PASSCODE_ONLY || lockMode == AppLockMode.BOTH) {
@@ -275,43 +269,20 @@ fun LockScreen(
                     )
                 }
 
-                // Biometric Button
+                // Biometric Icon Only (no button frame, no text)
                 if (lockMode == AppLockMode.BIOMETRIC_ONLY || lockMode == AppLockMode.BOTH) {
-                    if (lockMode == AppLockMode.BOTH) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    val isBiometricOnly = lockMode == AppLockMode.BIOMETRIC_ONLY
-                    val buttonBg = if (isBiometricOnly) colors.controlActiveBackground else colors.subCardBackground
-                    val buttonFg = if (isBiometricOnly) colors.controlActiveContent else colors.textPrimary
-
-                    Button(
+                    IconButton(
                         onClick = triggerBiometric,
-                        shape = RoundedCornerShape(AppDesignTokens.ButtonCornerRadius),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = buttonBg,
-                            contentColor = buttonFg
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
+                        modifier = Modifier.size(56.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Fingerprint,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "فتح بالبصمة",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 15.sp
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Outlined.Fingerprint,
+                            contentDescription = "فتح بالبصمة",
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(42.dp)
+                        )
                     }
                 }
             }

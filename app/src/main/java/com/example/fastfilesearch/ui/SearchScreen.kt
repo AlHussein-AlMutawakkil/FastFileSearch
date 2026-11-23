@@ -1108,24 +1108,22 @@ fun SearchScreen(
                                 key = { it.fileUri }
                             ) { group ->
                                 if (group.isDocument) {
-                                    // Grouped Card for Word (.docx) & PDF (.pdf) with padding
-                                    Box(modifier = Modifier.padding(horizontal = 14.dp)) {
-                                        WordPdfGroupedCard(
-                                            group = group,
-                                            onOpenFile = { onOpenFile(group.fileUri) },
-                                            isDark = isDark,
-                                            showAllRows = uiState.showAllRows,
-                                            selectionState = uiState.selectionState,
-                                            onToggleRowSelection = onToggleRowSelection,
-                                            searchFilter = uiState.searchFilter,
-                                            onCopySnippet = { text ->
-                                                clipboardManager.setText(AnnotatedString(text))
-                                                coroutineScope.launch {
-                                                    snackbarHostState.showSnackbar("تم نسخ الفقرة إلى الحافظة")
-                                                }
+                                    // Grouped Card for Word (.docx) & PDF (.pdf) (Edge-to-Edge matching Excel)
+                                    WordPdfGroupedCard(
+                                        group = group,
+                                        onOpenFile = { onOpenFile(group.fileUri) },
+                                        isDark = isDark,
+                                        showAllRows = uiState.showAllRows,
+                                        selectionState = uiState.selectionState,
+                                        onToggleRowSelection = onToggleRowSelection,
+                                        searchFilter = uiState.searchFilter,
+                                        onCopySnippet = { text ->
+                                            clipboardManager.setText(AnnotatedString(text))
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("تم نسخ الفقرة إلى الحافظة")
                                             }
-                                        )
-                                    }
+                                        }
+                                    )
                                 } else {
                                     // Flat data table replica (Edge-to-Edge)
                                     OfficialExcelTableCard(
