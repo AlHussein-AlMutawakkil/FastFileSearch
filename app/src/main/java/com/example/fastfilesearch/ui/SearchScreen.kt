@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -52,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -75,9 +78,22 @@ import com.example.fastfilesearch.ui.components.FilterSheet
 import com.example.fastfilesearch.ui.components.NoResultsPrompt
 import com.example.fastfilesearch.ui.components.OfficialExcelTableCard
 import com.example.fastfilesearch.ui.components.ReadyToSearchPrompt
-import com.example.fastfilesearch.ui.components.SettingsDialog
 import com.example.fastfilesearch.ui.components.WordPdfGroupedCard
+import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.ui.settings.AboutScreen
+import com.example.fastfilesearch.ui.settings.PermissionsScreen
+import com.example.fastfilesearch.ui.settings.SettingsScreen
+import com.example.fastfilesearch.ui.settings.ThemeSettingsScreen
 import kotlinx.coroutines.launch
+
+enum class AppDestination {
+    SEARCH,
+    SETTINGS,
+    THEME_SETTINGS,
+    PERMISSIONS,
+    ABOUT
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,7 +116,7 @@ fun SearchScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
-    var showSettingsDialog by remember { mutableStateOf(false) }
+    var currentDestination by rememberSaveable { mutableStateOf(AppDestination.SEARCH) }
     var showFilterSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.userMessage) {
@@ -132,43 +148,83 @@ fun SearchScreen(
         else -> isSystemInDarkTheme()
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        // Settings Modal Dialog wrapped in RTL Provider to ensure correct layout direction on all devices
-        if (showSettingsDialog) {
-            SettingsDialog(
-                uiState = uiState,
-                onSelectFolderClick = onSelectFolderClick,
-                onRefreshClick = onRefreshClick,
-                onToggleStretchSingleColumn = onToggleStretchSingleColumn,
-                onToggleShowAllRows = onToggleShowAllRows,
-                onToggleVerticalCopyFormat = onToggleVerticalCopyFormat,
-                onToggleExpandFullCellText = onToggleExpandFullCellText,
-                onSetAppTheme = onSetAppTheme,
-                onDismiss = { showSettingsDialog = false }
-            )
-        }
+    ProvideAppDesignTokens(isDark = isDark) {
+        val colors = LocalAppColors.current
 
-        // Monochromatic Filter Bottom Sheet
-        if (showFilterSheet) {
-            FilterSheet(
-                uiState = uiState,
-                isDark = isDark,
-                onApply = { newFilter ->
-                    onFilterChanged(newFilter)
-                    showFilterSheet = false
-                },
-                onDismiss = {
-                    showFilterSheet = false
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            when (currentDestination) {
+                AppDestination.SETTINGS -> {
+                    SettingsScreen(
+                        uiState = uiState,
+                        onSelectFolderClick = onSelectFolderClick,
+                        onRefreshClick = onRefreshClick,
+                        onToggleStretchSingleColumn = onToggleStretchSingleColumn,
+                        onToggleShowAllRows = onToggleShowAllRows,
+                        onToggleVerticalCopyFormat = onToggleVerticalCopyFormat,
+                        onToggleExpandFullCellText = onToggleExpandFullCellText,
+                        onNavigateToTheme = { currentDestination = AppDestination.THEME_SETTINGS },
+                        onNavigateToPermissions = { currentDestination = AppDestination.PERMISSIONS },
+                        onNavigateToAbout = { currentDestination = AppDestination.ABOUT },
+                        onBack = { currentDestination = AppDestination.SEARCH }
+                    )
+                    return@CompositionLocalProvider
                 }
-            )
-        }
 
-        Scaffold(
-            modifier = modifier.fillMaxSize(),
-            containerColor = MaterialTheme.colorScheme.background,
+                AppDestination.THEME_SETTINGS -> {
+                    ThemeSettingsScreen(
+                        currentTheme = uiState.appTheme,
+                        onSetTheme = onSetAppTheme,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.PERMISSIONS -> {
+                    PermissionsScreen(
+                        folderUri = uiState.folderUri,
+                        onSelectFolderClick = onSelectFolderClick,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.ABOUT -> {
+                    AboutScreen(
+                        onBack = { currentDestination = AppDestination.SETTINGS }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.SEARCH -> {
+                    // Fallthrough to main search layout
+                }
+            }
+
+            // Monochromatic Filter Bottom Sheet
+            if (showFilterSheet) {
+                FilterSheet(
+                    uiState = uiState,
+                    onApply = { newFilter ->
+                        onFilterChanged(newFilter)
+                        showFilterSheet = false
+                    },
+                    onDismiss = {
+                        showFilterSheet = false
+                    }
+                )
+            }
+
+            Scaffold(
+                modifier = modifier.fillMaxSize(),
+                containerColor = colors.screenBackground,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.screenBackground)
+                        .statusBarsPadding()
+                ) {
                     CenterAlignedTopAppBar(
                         title = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -177,23 +233,24 @@ fun SearchScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = colors.textPrimary
                                 )
                                 if (uiState.folderUri != null) {
                                     Text(
                                         text = "${uiState.filesCount} ملف مفهرس • ${uiState.segmentsCount} مقطع",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = colors.textSecondary
                                     )
                                 }
                             }
                         },
                         navigationIcon = {
-                            IconButton(onClick = { showSettingsDialog = true }) {
+                            IconButton(onClick = { currentDestination = AppDestination.SETTINGS }) {
                                 Icon(
                                     imageVector = Icons.Default.Settings,
                                     contentDescription = "الإعدادات",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = colors.textPrimary
                                 )
                             }
                         },
@@ -222,14 +279,14 @@ fun SearchScreen(
                                     contentDescription = "تحديث الفهرس",
                                     modifier = Modifier.graphicsLayer { rotationZ = rotation },
                                     tint = if (uiState.folderUri != null && !isIndexing)
-                                        MaterialTheme.colorScheme.primary
+                                        colors.textPrimary
                                     else
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                        colors.textSecondary.copy(alpha = 0.38f)
                                 )
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface
+                            containerColor = colors.screenBackground
                         )
                     )
 
@@ -238,7 +295,7 @@ fun SearchScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .background(colors.cardBackground)
                                 .padding(horizontal = 16.dp, vertical = 6.dp)
                         ) {
                             val progress = uiState.indexProgress
@@ -247,24 +304,26 @@ fun SearchScreen(
                                     progress = { progress.current.toFloat() / progress.total.toFloat() },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = MaterialTheme.colorScheme.primary
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = colors.controlActiveBackground,
+                                    trackColor = colors.divider
                                 )
                             } else {
                                 LinearProgressIndicator(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = MaterialTheme.colorScheme.primary
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = colors.controlActiveBackground,
+                                    trackColor = colors.divider
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = progress.statusMessage,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = colors.textSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -277,6 +336,7 @@ fun SearchScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .navigationBarsPadding()
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -474,4 +534,5 @@ fun SearchScreen(
             }
         }
     }
+}
 }

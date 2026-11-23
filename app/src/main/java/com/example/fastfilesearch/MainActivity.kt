@@ -14,8 +14,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 import androidx.documentfile.provider.DocumentFile
 import com.example.fastfilesearch.ui.SearchScreen
+import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
 import com.example.fastfilesearch.ui.theme.FastFileSearchTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,37 +37,45 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme()
             }
 
-            FastFileSearchTheme(darkTheme = isDark) {
-                // Folder Picker Contract using SAF
-                val folderPickerLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.OpenDocumentTree()
-                ) { uri ->
-                    if (uri != null) {
-                        val docFile = DocumentFile.fromTreeUri(this, uri)
-                        val folderName = docFile?.name ?: uri.lastPathSegment ?: "المجلد المحدد"
-                        viewModel.onFolderSelected(uri, folderName)
-                    }
-                }
+            // Dynamically set system status and navigation bar icon colors based on active theme
+            val insetsController = WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = !isDark
+            insetsController.isAppearanceLightNavigationBars = !isDark
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    SearchScreen(
-                        uiState = uiState,
-                        onSelectFolderClick = { folderPickerLauncher.launch(null) },
-                        onRefreshClick = { viewModel.onRefreshClicked() },
-                        onQueryChanged = { viewModel.onQueryChanged(it) },
-                        onClearQuery = { viewModel.onClearQuery() },
-                        onOpenFile = { viewModel.onOpenFile(it) },
-                        onDismissMessage = { viewModel.onDismissMessage() },
-                        onFilterChanged = { viewModel.onFilterChanged(it) },
-                        onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) },
-                        onToggleShowAllRows = { viewModel.onToggleShowAllRows(it) },
-                        onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },
-                        onToggleExpandFullCellText = { viewModel.onToggleExpandFullCellText(it) },
-                        onSetAppTheme = { viewModel.onSetAppTheme(it) }
-                    )
+            FastFileSearchTheme(darkTheme = isDark) {
+                ProvideAppDesignTokens(isDark = isDark) {
+                    val colors = LocalAppColors.current
+                    // Folder Picker Contract using SAF
+                    val folderPickerLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.OpenDocumentTree()
+                    ) { uri ->
+                        if (uri != null) {
+                            val docFile = DocumentFile.fromTreeUri(this, uri)
+                            val folderName = docFile?.name ?: uri.lastPathSegment ?: "المجلد المحدد"
+                            viewModel.onFolderSelected(uri, folderName)
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = colors.screenBackground
+                    ) {
+                        SearchScreen(
+                            uiState = uiState,
+                            onSelectFolderClick = { folderPickerLauncher.launch(null) },
+                            onRefreshClick = { viewModel.onRefreshClicked() },
+                            onQueryChanged = { viewModel.onQueryChanged(it) },
+                            onClearQuery = { viewModel.onClearQuery() },
+                            onOpenFile = { viewModel.onOpenFile(it) },
+                            onDismissMessage = { viewModel.onDismissMessage() },
+                            onFilterChanged = { viewModel.onFilterChanged(it) },
+                            onToggleStretchSingleColumn = { viewModel.onToggleStretchSingleColumn(it) },
+                            onToggleShowAllRows = { viewModel.onToggleShowAllRows(it) },
+                            onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },
+                            onToggleExpandFullCellText = { viewModel.onToggleExpandFullCellText(it) },
+                            onSetAppTheme = { viewModel.onSetAppTheme(it) }
+                        )
+                    }
                 }
             }
         }
