@@ -1,6 +1,13 @@
 package com.example.fastfilesearch.ui.components
 
 import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,11 +31,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +61,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -56,13 +74,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TableCellHelper
 import com.example.fastfilesearch.ui.TableLayoutCalculator
 import com.example.fastfilesearch.ui.TextHighlighter
+import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
+import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
+import com.example.fastfilesearch.ui.designsystem.AppSecondaryButton
+import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.util.ValueInteractionHelper
 
 private class ExcelTableThemeColors(
     val tableBg: Color,
@@ -116,7 +143,8 @@ private fun rememberExcelTableColors(isDark: Boolean): ExcelTableThemeColors {
 private data class CellDetailDialogInfo(
     val columnName: String,
     val rowNumber: String,
-    val fullText: String
+    val fullText: String,
+    val query: String = ""
 )
 
 @Composable
@@ -129,6 +157,7 @@ fun OfficialExcelTableCard(
     verticalCopyFormat: Boolean = true,
     expandFullCellText: Boolean = true,
     onCopyRow: ((String) -> Unit)? = null,
+    onViewRecord: ((RecordDetailData) -> Unit)? = null,
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
@@ -136,6 +165,7 @@ fun OfficialExcelTableCard(
     val clipboardManager = LocalClipboardManager.current
     val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
     val colors = rememberExcelTableColors(isDark)
+    val appColors = LocalAppColors.current
 
     // Calm, soft pastel top bar color matching the file type
     val topBarBg = remember(visual.color, isDark) {
@@ -168,42 +198,224 @@ fun OfficialExcelTableCard(
     }
 
     var selectedCellInfo by remember { mutableStateOf<CellDetailDialogInfo?>(null) }
+    var isCardExpanded by remember { mutableStateOf(true) }
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isCardExpanded) 0f else 180f,
+        label = "cardExpandArrow"
+    )
 
-    // Dialog showing full cell content on click
+    // Dialog showing full cell content on click - strictly Dialog matching AppDesignTokens
     if (selectedCellInfo != null) {
         val info = selectedCellInfo!!
-        AlertDialog(
+
+        Dialog(
             onDismissRequest = { selectedCellInfo = null },
-            title = {
-                Text(
-                    text = "${info.columnName} • صف ${info.rowNumber}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-            },
-            text = {
-                SelectionContainer {
-                    Text(
-                        text = info.fullText,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    clipboardManager.setText(AnnotatedString(info.fullText))
-                    selectedCellInfo = null
-                }) {
-                    Text("نسخ", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { selectedCellInfo = null }) {
-                    Text("إغلاق")
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                        .background(appColors.cardBackground)
+                        .border(1.dp, appColors.divider, RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                        .padding(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Title: Column name + Row number
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = info.columnName,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = appColors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Text(
+                                text = "صف ${info.rowNumber}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = appColors.textSecondary
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = appColors.divider, thickness = AppDesignTokens.DividerThickness)
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Scrollable Body with TextHighlighter
+                        val highlightedText = remember(info.fullText, info.query, isDark, searchFilter) {
+                            if (info.query.isNotBlank()) {
+                                TextHighlighter.highlight(
+                                    text = info.fullText,
+                                    query = info.query,
+                                    method = searchFilter.method,
+                                    ignoreDiacritics = searchFilter.ignoreDiacritics,
+                                    highlightColor = highlightBg,
+                                    highlightTextColor = highlightFg
+                                )
+                            } else {
+                                AnnotatedString(info.fullText)
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            SelectionContainer {
+                                Text(
+                                    text = highlightedText,
+                                    fontSize = 14.sp,
+                                    lineHeight = 21.sp,
+                                    color = appColors.textPrimary
+                                )
+                            }
+
+                            // Interactive quick action chips (Phone, URL, Email)
+                            val phones = remember(info.fullText) { ValueInteractionHelper.extractPhoneNumbers(info.fullText) }
+                            val urls = remember(info.fullText) { ValueInteractionHelper.extractUrls(info.fullText) }
+                            val emails = remember(info.fullText) { ValueInteractionHelper.extractEmails(info.fullText) }
+
+                            if (phones.isNotEmpty() || urls.isNotEmpty() || emails.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    phones.forEach { phone ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(appColors.subCardBackground)
+                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
+                                                        context.startActivity(intent)
+                                                    } catch (_: Exception) {}
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Phone,
+                                                contentDescription = null,
+                                                tint = appColors.textPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = phone,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = appColors.textPrimary
+                                            )
+                                        }
+                                    }
+
+                                    urls.forEach { url ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(appColors.subCardBackground)
+                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                        context.startActivity(intent)
+                                                    } catch (_: Exception) {}
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Language,
+                                                contentDescription = null,
+                                                tint = appColors.textPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "فتح الرابط",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = appColors.textPrimary
+                                            )
+                                        }
+                                    }
+
+                                    emails.forEach { email ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(appColors.subCardBackground)
+                                                .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    try {
+                                                        val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$email"))
+                                                        context.startActivity(intent)
+                                                    } catch (_: Exception) {}
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Email,
+                                                contentDescription = null,
+                                                tint = appColors.textPrimary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = email,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = appColors.textPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        // Bottom Buttons: Copy & Close in monochrome AppDesignTokens
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            AppPrimaryButton(
+                                text = "نسخ",
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(info.fullText))
+                                    selectedCellInfo = null
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            AppSecondaryButton(
+                                text = "إغلاق",
+                                onClick = { selectedCellInfo = null },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
     Column(
@@ -211,12 +423,12 @@ fun OfficialExcelTableCard(
             .fillMaxWidth()
             .background(colors.tableBg)
     ) {
-        // 1. Top Bar: Calm file-specific tint, icon, file name, and matches count (numbers only in place of open button)
+        // 1. Top Bar: Calm file-specific tint, icon, file name, matches count, and collapse/expand arrow
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(topBarBg)
-                .clickable(onClick = onOpenFile)
+                .clickable { isCardExpanded = !isCardExpanded }
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -254,9 +466,26 @@ fun OfficialExcelTableCard(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowDown,
+                contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
+                tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
+                modifier = Modifier
+                    .size(19.dp)
+                    .rotate(arrowRotation)
+            )
         }
 
-        HorizontalDivider(color = colors.gridBorderColor, thickness = 1.dp)
+        AnimatedVisibility(
+            visible = isCardExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                HorizontalDivider(color = colors.gridBorderColor, thickness = 1.dp)
 
         // 2. Render Sheet Tables
         sheetGroups.forEach { (sheetName, sheetResults) ->
@@ -487,18 +716,52 @@ fun OfficialExcelTableCard(
                                         expanded = menuExpandedRowIndex == index,
                                         onDismissRequest = { menuExpandedRowIndex = null },
                                         modifier = Modifier
-                                            .background(colors.popupBg)
-                                            .border(0.5.dp, colors.gridBorderColor, RoundedCornerShape(8.dp))
+                                            .background(appColors.elevatedSurface)
+                                            .border(AppDesignTokens.DividerThickness, appColors.divider, RoundedCornerShape(AppDesignTokens.MenuCornerRadius))
                                     ) {
                                         val formattedRow = remember(cells, sheetHeaders, verticalCopyFormat) {
                                             formatRowText(cells, sheetHeaders, vertical = verticalCopyFormat)
                                         }
 
+                                        // 1. عرض
                                         DropdownMenuItem(
                                             text = {
                                                 Text(
-                                                    text = "نسخ الصف",
-                                                    color = colors.cellTextColor,
+                                                    text = "عرض",
+                                                    color = appColors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpandedRowIndex = null
+                                                onViewRecord?.invoke(
+                                                    RecordDetailData(
+                                                        fileName = group.fileName,
+                                                        sheetName = sheetName,
+                                                        rowNumber = rowNum,
+                                                        cells = cells,
+                                                        headers = sheetHeaders,
+                                                        query = result.query,
+                                                        searchFilter = searchFilter
+                                                    )
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Visibility,
+                                                    contentDescription = "عرض",
+                                                    tint = appColors.textSecondary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        )
+
+                                        // 2. نسخ
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "نسخ",
+                                                    color = appColors.textPrimary,
                                                     fontSize = 14.sp
                                                 )
                                             },
@@ -512,19 +775,20 @@ fun OfficialExcelTableCard(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = Icons.Default.ContentCopy,
+                                                    imageVector = Icons.Outlined.ContentCopy,
                                                     contentDescription = "نسخ",
-                                                    tint = colors.headerTextColor,
+                                                    tint = appColors.textSecondary,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
                                         )
 
+                                        // 3. مشاركة
                                         DropdownMenuItem(
                                             text = {
                                                 Text(
                                                     text = "مشاركة",
-                                                    color = colors.cellTextColor,
+                                                    color = appColors.textPrimary,
                                                     fontSize = 14.sp
                                                 )
                                             },
@@ -534,9 +798,9 @@ fun OfficialExcelTableCard(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = Icons.Default.Share,
+                                                    imageVector = Icons.Outlined.Share,
                                                     contentDescription = "مشاركة",
-                                                    tint = colors.headerTextColor,
+                                                    tint = appColors.textSecondary,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -573,7 +837,8 @@ fun OfficialExcelTableCard(
                                                     selectedCellInfo = CellDetailDialogInfo(
                                                         columnName = colTitle,
                                                         rowNumber = rowNum,
-                                                        fullText = cellText
+                                                        fullText = cellText,
+                                                        query = result.query
                                                     )
                                                 }
                                             }
@@ -631,6 +896,8 @@ fun OfficialExcelTableCard(
             HorizontalDivider(color = colors.gridBorderColor, thickness = 1.dp)
         }
     }
+}
+}
 }
 
 /**

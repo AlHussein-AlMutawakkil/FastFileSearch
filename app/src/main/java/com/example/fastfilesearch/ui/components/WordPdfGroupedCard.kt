@@ -1,6 +1,12 @@
 package com.example.fastfilesearch.ui.components
 
 import android.content.Intent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -38,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +108,12 @@ fun WordPdfGroupedCard(
     val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
     val highlightFg = if (isDark) Color(0xFFFFE082) else Color(0xFF332600)
 
+    var isCardExpanded by remember { mutableStateOf(true) }
+    val arrowRotation by animateFloatAsState(
+        targetValue = if (isCardExpanded) 0f else 180f,
+        label = "wordPdfExpandArrow"
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -113,7 +127,7 @@ fun WordPdfGroupedCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onOpenFile)
+                    .clickable { isCardExpanded = !isCardExpanded }
                     .background(headerBg)
                     .padding(horizontal = 14.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -160,128 +174,147 @@ fun WordPdfGroupedCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
+                    tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
+                    modifier = Modifier
+                        .size(19.dp)
+                        .rotate(arrowRotation)
+                )
             }
 
-            HorizontalDivider(color = visual.color.copy(alpha = 0.2f), thickness = 1.dp)
-
-            // Document Snippets List
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            AnimatedVisibility(
+                visible = isCardExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
             ) {
-                displayedResults.forEach { result ->
-                    var isExpanded by remember { mutableStateOf(false) }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    HorizontalDivider(color = visual.color.copy(alpha = 0.2f), thickness = 1.dp)
 
+                    // Document Snippets List
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                RoundedCornerShape(8.dp)
-                            )
-                            .clickable { isExpanded = !isExpanded }
-                            .padding(10.dp)
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                        displayedResults.forEach { result ->
+                            var isExpanded by remember { mutableStateOf(false) }
+
+                            Column(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(visual.color.copy(alpha = 0.12f))
-                                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { isExpanded = !isExpanded }
+                                    .padding(10.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Place,
-                                    contentDescription = null,
-                                    tint = visual.color,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(visual.color.copy(alpha = 0.12f))
+                                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Place,
+                                            contentDescription = null,
+                                            tint = visual.color,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = result.location,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = visual.color
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        IconButton(
+                                            onClick = { onCopySnippet(result.snippet) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "نسخ الفقرة",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { onShareSnippet(result.snippet) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Share,
+                                                contentDescription = "مشاركة الفقرة",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                val highlightedSnippet = remember(result.snippet, result.query, isDark, searchFilter) {
+                                    TextHighlighter.highlight(
+                                        text = result.snippet,
+                                        query = result.query,
+                                        method = searchFilter.method,
+                                        ignoreDiacritics = searchFilter.ignoreDiacritics,
+                                        highlightColor = highlightBg,
+                                        highlightTextColor = highlightFg
+                                    )
+                                }
+
                                 Text(
-                                    text = result.location,
-                                    fontSize = 11.sp,
+                                    text = highlightedSnippet,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = if (isExpanded) Int.MAX_VALUE else 4,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // Show more button if more than 15 paragraphs and showAllRows is false
+                        if (!showAllRows && remainingCount > 0) {
+                            TextButton(
+                                onClick = { isExpandedAll = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
+                            ) {
+                                Text(
+                                    text = "عرض المزيد (+$remainingCount فقرة)",
                                     fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
                                     color = visual.color
                                 )
                             }
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { onCopySnippet(result.snippet) },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = "نسخ الفقرة",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { onShareSnippet(result.snippet) },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Share,
-                                        contentDescription = "مشاركة الفقرة",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                }
-                            }
                         }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        val highlightedSnippet = remember(result.snippet, result.query, isDark, searchFilter) {
-                            TextHighlighter.highlight(
-                                text = result.snippet,
-                                query = result.query,
-                                method = searchFilter.method,
-                                ignoreDiacritics = searchFilter.ignoreDiacritics,
-                                highlightColor = highlightBg,
-                                highlightTextColor = highlightFg
-                            )
-                        }
-
-                        Text(
-                            text = highlightedSnippet,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = if (isExpanded) Int.MAX_VALUE else 4,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // Show more button if more than 15 paragraphs and showAllRows is false
-                if (!showAllRows && remainingCount > 0) {
-                    TextButton(
-                        onClick = { isExpandedAll = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                    ) {
-                        Text(
-                            text = "عرض المزيد (+$remainingCount فقرة)",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = visual.color
-                        )
                     }
                 }
             }

@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
+import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
 import com.example.fastfilesearch.ui.components.FileResultGroup
@@ -139,6 +140,7 @@ fun SearchScreen(
     var currentDestination by rememberSaveable { mutableStateOf(AppDestination.SEARCH) }
     var showFilterSheet by remember { mutableStateOf(false) }
     var showWorkspaceSwitcherSheet by remember { mutableStateOf(false) }
+    var activeRecordDetail by remember { mutableStateOf<RecordDetailData?>(null) }
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -173,6 +175,16 @@ fun SearchScreen(
         val colors = LocalAppColors.current
 
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            if (activeRecordDetail != null) {
+                RecordDetailScreen(
+                    data = activeRecordDetail!!,
+                    verticalCopyFormat = uiState.verticalCopyFormat,
+                    isDark = isDark,
+                    onBack = { activeRecordDetail = null }
+                )
+                return@CompositionLocalProvider
+            }
+
             when (currentDestination) {
                 AppDestination.SETTINGS -> {
                     SettingsScreen(
@@ -683,6 +695,7 @@ fun SearchScreen(
                                         expandFullCellText = uiState.expandFullCellText,
                                         searchFilter = uiState.searchFilter,
                                         onOpenFile = { onOpenFile(group.fileUri) },
+                                        onViewRecord = { activeRecordDetail = it },
                                         onCopyRow = { text ->
                                             clipboardManager.setText(AnnotatedString(text))
                                             coroutineScope.launch {

@@ -712,6 +712,42 @@ fun AppPrimaryButton(
 }
 
 /**
+ * 10) AppSecondaryButton:
+ * Full-width or flexible monochromatic secondary button with subCardBackground and thin border.
+ */
+@Composable
+fun AppSecondaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val colors = LocalAppColors.current
+
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        shape = RoundedCornerShape(AppDesignTokens.ButtonCornerRadius),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colors.subCardBackground,
+            contentColor = colors.textPrimary,
+            disabledContainerColor = colors.divider,
+            disabledContentColor = colors.textSecondary
+        ),
+        border = androidx.compose.foundation.BorderStroke(AppDesignTokens.DividerThickness, colors.divider),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/**
  * AppDropdownMenu:
  * Floating elevated dropdown container with 18.dp corners, dividers, and circular check indicator.
  */
