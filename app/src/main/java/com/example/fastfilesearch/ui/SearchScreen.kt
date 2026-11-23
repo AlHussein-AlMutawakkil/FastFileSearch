@@ -364,7 +364,7 @@ fun SearchScreen(
                             } else if (uiState.workspaces.isNotEmpty()) {
                                 "جميع المجلدات (${uiState.workspaces.size})"
                             } else {
-                                "البحث السريع في الملفات"
+                                "بحث آمن"
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Row(

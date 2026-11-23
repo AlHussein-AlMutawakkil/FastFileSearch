@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -31,9 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.fastfilesearch.R
 import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.AppNavigationRow
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
@@ -103,7 +103,7 @@ fun AboutScreen(
             .navigationBarsPadding()
     ) {
         AppTopBar(
-            title = "حول FastFileSearch",
+            title = "حول بحث آمن",
             onBack = onBack
         )
 
@@ -130,21 +130,21 @@ fun AboutScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(32.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(colors.controlActiveBackground),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Search,
+                            painter = painterResource(id = R.drawable.ic_app_logo),
                             contentDescription = null,
                             tint = colors.controlActiveContent,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
                     Text(
-                        text = "FastFileSearch",
+                        text = "بحث آمن",
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
@@ -155,7 +155,7 @@ fun AboutScreen(
 
                 // Line 2: 2-line description
                 Text(
-                    text = "FastFileSearch محرك بحث محلي فائق السرعة وفهرسة متقدمة لمستندات أوفيس والجداول وملفات PDF والنصوص مع مطابقة عربية ذكية ودعم كامل دون اتصال.",
+                    text = "بحث آمن محرك بحث محلي فائق السرعة وفهرسة متقدمة لمستندات أوفيس والجداول وملفات PDF والنصوص مع مطابقة عربية ذكية ودعم كامل دون اتصال.",
                     fontSize = 13.sp,
                     color = colors.textSecondary,
                     lineHeight = 19.sp
@@ -186,7 +186,7 @@ fun AboutScreen(
                         showChevron = true,
                         onClick = {
                             activeDialogTitle = "اتفاقية الخدمة"
-                            activeDialogContent = "تطبيق FastFileSearch هو أداة مجانية للبحث المحلي في الملفات والمستندات على جهازك دون إرسال أي بيانات إلى خوادم خارجية."
+                            activeDialogContent = "تطبيق «بحث آمن» هو أداة مجانية للبحث المحلي في الملفات والمستندات على جهازك دون إرسال أي بيانات إلى خوادم خارجية."
                         }
                     )
                 }
