@@ -193,7 +193,7 @@ fun GeneratorScreen(
         ) {
             // Top Bar
             AppTopBar(
-                title = "مولّد التراخيص",
+                title = "بحث آمن - تفعيل",
                 actions = {
                     IconButton(
                         onClick = onNavigateToHistory,
