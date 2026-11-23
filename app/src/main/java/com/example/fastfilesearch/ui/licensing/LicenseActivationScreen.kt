@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +64,8 @@ import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.util.DeviceInfoHelper
+import com.example.fastfilesearch.util.findActivity
 
 @Composable
 fun LicenseActivationScreen(
@@ -71,7 +74,7 @@ fun LicenseActivationScreen(
     onActivationSuccess: () -> Unit
 ) {
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = context.findActivity<Activity>()
     val clipboardManager = LocalClipboardManager.current
 
     BackHandler {
@@ -184,26 +187,80 @@ fun LicenseActivationScreen(
                                     IconButton(
                                         onClick = {
                                             try {
+                                                val message = DeviceInfoHelper.buildActivationRequestMessage(context, installationId)
                                                 val intent = Intent(Intent.ACTION_SEND).apply {
                                                     type = "text/plain"
-                                                    putExtra(
-                                                        Intent.EXTRA_TEXT,
-                                                        "معرّف التثبيت لتطبيق بحث آمن:\n$installationId"
-                                                    )
+                                                    putExtra(Intent.EXTRA_TEXT, message)
                                                 }
-                                                context.startActivity(Intent.createChooser(intent, "مشاركة معرّف التثبيت"))
+                                                context.startActivity(Intent.createChooser(intent, "مشاركة طلب التفعيل"))
                                             } catch (_: Exception) {}
                                         },
                                         modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.Share,
-                                            contentDescription = "مشاركة المعرّف",
+                                            contentDescription = "مشاركة طلب التفعيل",
                                             tint = colors.textSecondary,
                                             modifier = Modifier.size(19.dp)
                                         )
                                     }
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(
+                                thickness = AppDesignTokens.DividerThickness,
+                                color = colors.divider
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Secondary Device & Version Info
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "نوع الهاتف والموديل",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                                Text(
+                                    text = DeviceInfoHelper.getDeviceDisplayName(),
+                                    fontSize = 12.sp,
+                                    color = colors.textPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "إصدار النظام",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                                Text(
+                                    text = DeviceInfoHelper.getOsVersionShort(),
+                                    fontSize = 12.sp,
+                                    color = colors.textPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "إصدار التطبيق",
+                                    fontSize = 12.sp,
+                                    color = colors.textSecondary
+                                )
+                                Text(
+                                    text = DeviceInfoHelper.getAppVersion(context),
+                                    fontSize = 12.sp,
+                                    color = colors.textPrimary
+                                )
                             }
                         }
                     }
@@ -299,6 +356,16 @@ fun LicenseActivationScreen(
                         }
                     },
                     enabled = licenseInput.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                Text(
+                    text = "© 2026 م. الحسين المتوكل. جميع الحقوق محفوظة.",
+                    fontSize = 12.sp,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

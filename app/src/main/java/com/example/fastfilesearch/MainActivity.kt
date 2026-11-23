@@ -2,6 +2,7 @@ package com.example.fastfilesearch
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -111,8 +112,26 @@ class MainActivity : FragmentActivity() {
                             SearchScreen(
                                 uiState = uiState,
                                 onSelectFolderClick = {
+                                    val currentCount = viewModel.uiState.value.workspaces.size
+                                    if (!licenseManager.canAddWorkspace(currentCount)) {
+                                        val maxAllowed = licenseManager.getActivePayload()?.maxWorkspaces ?: 0
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "تم الوصول إلى الحد الأقصى للمجلدات المسموح بها في ترخيصك ($maxAllowed)",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        return@SearchScreen
+                                    }
                                     lockManager.suppressNextLockOnce()
-                                    folderPickerLauncher.launch(null)
+                                    try {
+                                        folderPickerLauncher.launch(null)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "تعذر فتح منتقي المجلدات: ${e.localizedMessage}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 },
                                 onRefreshClick = { viewModel.onRefreshClicked() },
                                 onQueryChanged = { viewModel.onQueryChanged(it) },

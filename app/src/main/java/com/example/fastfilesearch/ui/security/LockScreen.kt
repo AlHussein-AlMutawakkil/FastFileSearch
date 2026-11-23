@@ -66,6 +66,7 @@ import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.util.findActivity
 import kotlinx.coroutines.delay
 
 @Composable
@@ -75,7 +76,7 @@ fun LockScreen(
     onUnlock: () -> Unit
 ) {
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
+    val activity = context.findActivity<FragmentActivity>()
 
     BackHandler {
         activity?.moveTaskToBack(true)

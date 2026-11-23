@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Folder
@@ -44,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -67,6 +70,7 @@ import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppTopBar
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.util.DeviceInfoHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -221,37 +225,74 @@ fun LicenseSettingsScreen(
                         }
 
                         item {
-                            val excelLabel = if (payload?.allowExcelExport == true) "مشمول" else "غير مشمول"
-                            AppNavigationRow(
+                            LicensePermissionRow(
                                 title = "تصدير ومشاركة Excel",
-                                value = excelLabel,
                                 icon = Icons.Outlined.TableChart,
-                                showChevron = false
+                                isEnabled = payload?.allowExcelExport == true
                             )
                         }
 
                         item {
-                            val appLockLabel = if (payload?.allowAppLock == true) "مشمول" else "غير مشمول"
-                            AppNavigationRow(
+                            LicensePermissionRow(
                                 title = "قفل التطبيق بالبصمة",
-                                value = appLockLabel,
                                 icon = Icons.Outlined.Lock,
+                                isEnabled = payload?.allowAppLock == true
+                            )
+                        }
+
+                        item {
+                            LicensePermissionRow(
+                                title = "المزامنة التلقائية بالخلفية",
+                                icon = Icons.Outlined.Sync,
+                                isEnabled = payload?.allowBackgroundSync == true
+                            )
+                        }
+                    }
+
+                    // CARD 3: بيانات الجهاز والإصدار
+                    AppSectionCard {
+                        item {
+                            AppNavigationRow(
+                                title = "إصدار التطبيق",
+                                value = DeviceInfoHelper.getAppVersion(context),
                                 showChevron = false
                             )
                         }
 
                         item {
-                            val bgSyncLabel = if (payload?.allowBackgroundSync == true) "مشمول" else "غير مشمول"
                             AppNavigationRow(
-                                title = "المزامنة التلقائية بالخلفية",
-                                value = bgSyncLabel,
-                                icon = Icons.Outlined.Sync,
+                                title = "نوع الهاتف",
+                                value = DeviceInfoHelper.getManufacturer(),
+                                showChevron = false
+                            )
+                        }
+
+                        item {
+                            AppNavigationRow(
+                                title = "موديل الهاتف",
+                                value = DeviceInfoHelper.getModel(),
+                                showChevron = false
+                            )
+                        }
+
+                        item {
+                            AppNavigationRow(
+                                title = "إصدار النظام",
+                                value = DeviceInfoHelper.getOsVersion(),
+                                showChevron = false
+                            )
+                        }
+
+                        item {
+                            AppNavigationRow(
+                                title = "معمارية الجهاز",
+                                value = DeviceInfoHelper.getCpuAbi(),
                                 showChevron = false
                             )
                         }
                     }
 
-                    // CARD 3: خيار تحديث / تجديد كود الترخيص
+                    // CARD 4: خيار تحديث / تجديد كود الترخيص
                     AppSectionCard {
                         item {
                             AppNavigationRow(
@@ -412,5 +453,45 @@ fun LicenseSettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LicensePermissionRow(
+    title: String,
+    icon: ImageVector,
+    isEnabled: Boolean
+) {
+    val colors = LocalAppColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 15.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = colors.textPrimary,
+                modifier = Modifier.size(22.dp)
+            )
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = colors.textPrimary
+            )
+        }
+        Icon(
+            imageVector = if (isEnabled) Icons.Outlined.Check else Icons.Outlined.Close,
+            contentDescription = if (isEnabled) "مفعّل" else "غير مفعّل",
+            tint = if (isEnabled) colors.textPrimary else colors.textSecondary,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "FastFileSearch"
 include(":app")
+include(":license_admin")
  

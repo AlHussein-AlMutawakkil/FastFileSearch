@@ -65,6 +65,7 @@ import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
 import com.example.fastfilesearch.ui.designsystem.AppTopBar
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.util.findActivity
 
 @Composable
 fun AppLockSettingsScreen(
@@ -73,7 +74,7 @@ fun AppLockSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
+    val activity = context.findActivity<FragmentActivity>()
     val colors = LocalAppColors.current
 
     val currentLockMode by lockManager.lockModeFlow.collectAsState()

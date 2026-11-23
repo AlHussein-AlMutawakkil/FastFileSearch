@@ -1,6 +1,7 @@
 package com.example.fastfilesearch.ui.settings
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,7 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
 import com.example.fastfilesearch.SearchUiState
+import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.model.Workspace
+import com.example.fastfilesearch.security.AppLockManager
 import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
@@ -146,7 +149,25 @@ fun WorkspacesScreen(
         ) {
             AppPrimaryButton(
                 text = "إضافة مجلد",
-                onClick = { folderPickerLauncher.launch(null) }
+                onClick = {
+                    val licenseManager = LicenseManager.getInstance(context)
+                    val lockManager = AppLockManager.getInstance(context)
+                    if (!licenseManager.canAddWorkspace(uiState.workspaces.size)) {
+                        val maxAllowed = licenseManager.getActivePayload()?.maxWorkspaces ?: 0
+                        Toast.makeText(
+                            context,
+                            "تم الوصول إلى الحد الأقصى للمجلدات المسموح بها في ترخيصك ($maxAllowed)",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } else {
+                        lockManager.suppressNextLockOnce()
+                        try {
+                            folderPickerLauncher.launch(null)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "تعذر فتح منتقي المجلدات: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
             )
         }
     }
