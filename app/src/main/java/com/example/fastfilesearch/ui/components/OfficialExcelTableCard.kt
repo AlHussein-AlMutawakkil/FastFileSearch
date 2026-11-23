@@ -8,9 +8,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -63,9 +66,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -89,6 +94,12 @@ import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.AppPrimaryButton
 import com.example.fastfilesearch.ui.designsystem.AppSecondaryButton
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.ui.selection.CellKey
+import com.example.fastfilesearch.ui.selection.RowKey
+import com.example.fastfilesearch.ui.selection.SelectedCellData
+import com.example.fastfilesearch.ui.selection.SelectedRowData
+import com.example.fastfilesearch.ui.selection.SelectionMode
+import com.example.fastfilesearch.ui.selection.SelectionState
 import com.example.fastfilesearch.util.ValueInteractionHelper
 
 private class ExcelTableThemeColors(
@@ -147,6 +158,7 @@ private data class CellDetailDialogInfo(
     val query: String = ""
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OfficialExcelTableCard(
     group: FileResultGroup,
@@ -158,11 +170,15 @@ fun OfficialExcelTableCard(
     expandFullCellText: Boolean = true,
     onCopyRow: ((String) -> Unit)? = null,
     onViewRecord: ((RecordDetailData) -> Unit)? = null,
+    selectionState: SelectionState = SelectionState(),
+    onToggleRowSelection: ((SelectedRowData) -> Unit)? = null,
+    onToggleCellSelection: ((SelectedCellData) -> Unit)? = null,
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
     val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
     val colors = rememberExcelTableColors(isDark)
     val appColors = LocalAppColors.current
@@ -683,7 +699,29 @@ fun OfficialExcelTableCard(
                         // Data Rows
                         rowsData.forEachIndexed { index, (rowNum, cells, result) ->
                             val isEven = index % 2 == 0
-                            val rowBg = if (isEven) colors.tableBg else colors.rowAltBg
+                            val rowKey = remember(group.fileUri, sheetName, index) {
+                                RowKey(fileUri = group.fileUri, sheetName = sheetName, rowIndex = index)
+                            }
+                            val isRowSelected = selectionState.isRowSelected(rowKey)
+                            val rowData = remember(rowKey, group.fileName, sheetName, rowNum, cells, sheetHeaders) {
+                                SelectedRowData(
+                                    key = rowKey,
+                                    fileName = group.fileName,
+                                    sheetName = sheetName,
+                                    rowNumber = rowNum,
+                                    cells = cells,
+                                    headers = sheetHeaders,
+                                    isDocument = false
+                                )
+                            }
+
+                            val rowBg = if (isRowSelected) {
+                                appColors.textPrimary.copy(alpha = 0.08f)
+                            } else if (isEven) {
+                                colors.tableBg
+                            } else {
+                                colors.rowAltBg
+                            }
 
                             Row(
                                 modifier = Modifier
@@ -692,14 +730,29 @@ fun OfficialExcelTableCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 // Row Number Cell
+                                val rowNumCellBg = if (isRowSelected) appColors.controlActiveBackground else colors.rowNumBg
+                                val rowNumCellFg = if (isRowSelected) appColors.controlActiveContent else colors.headerTextColor
+
                                 Box(
                                     modifier = Modifier
                                         .width(dims.rowNumWidth)
                                         .fillMaxHeight()
                                         .defaultMinSize(minHeight = 42.dp)
                                         .border(0.5.dp, colors.headerBorderColor)
-                                        .background(colors.rowNumBg)
-                                        .clickable { menuExpandedRowIndex = index }
+                                        .background(rowNumCellBg)
+                                        .combinedClickable(
+                                            onClick = {
+                                                if (selectionState.mode == SelectionMode.ROWS) {
+                                                    onToggleRowSelection?.invoke(rowData)
+                                                } else {
+                                                    menuExpandedRowIndex = index
+                                                }
+                                            },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                onToggleRowSelection?.invoke(rowData)
+                                            }
+                                        )
                                         .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -707,7 +760,7 @@ fun OfficialExcelTableCard(
                                         text = rowNum,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = colors.headerTextColor,
+                                        color = rowNumCellFg,
                                         fontFamily = FontFamily.Monospace
                                     )
 
@@ -805,6 +858,29 @@ fun OfficialExcelTableCard(
                                                 )
                                             }
                                         )
+
+                                        // 4. تحديد
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "تحديد",
+                                                    color = appColors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpandedRowIndex = null
+                                                onToggleRowSelection?.invoke(rowData)
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.CheckCircle,
+                                                    contentDescription = "تحديد",
+                                                    tint = appColors.textSecondary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        )
                                     }
                                 }
 
@@ -814,11 +890,38 @@ fun OfficialExcelTableCard(
                                     val colW = dims.columnWidths.getOrElse(colIndex) { 110.dp }
                                     val colTitle = sheetHeaders.getOrNull(colIndex)?.takeIf { it.isNotBlank() } ?: "عمود ${colIndex + 1}"
 
+                                    val cellKey = remember(group.fileUri, sheetName, index, colIndex) {
+                                        CellKey(fileUri = group.fileUri, sheetName = sheetName, rowIndex = index, colIndex = colIndex)
+                                    }
+                                    val isCellSelected = selectionState.isCellSelected(cellKey)
+                                    val cellData = remember(cellKey, group.fileName, sheetName, rowNum, colTitle, cellText) {
+                                        SelectedCellData(
+                                            key = cellKey,
+                                            fileName = group.fileName,
+                                            sheetName = sheetName,
+                                            rowNumber = rowNum,
+                                            columnName = colTitle,
+                                            value = cellText
+                                        )
+                                    }
+
                                     val isMatch = remember(cellText, result.query) {
                                         TableCellHelper.isCellMatching(cellText, result.query)
                                     }
 
-                                    val cellBg = if (isMatch) colors.matchBg else Color.Transparent
+                                    val cellBg = if (isCellSelected) {
+                                        appColors.textPrimary.copy(alpha = 0.14f)
+                                    } else if (isMatch) {
+                                        colors.matchBg
+                                    } else {
+                                        Color.Transparent
+                                    }
+
+                                    val cellBorderModifier = if (isCellSelected) {
+                                        Modifier.border(1.5.dp, appColors.textPrimary)
+                                    } else {
+                                        Modifier.border(0.5.dp, colors.gridBorderColor)
+                                    }
 
                                     // Align start for single column and long text cells (> 22 chars), center for short/numeric
                                     val isLong = cellText.length > 22 || maxCols == 1
@@ -830,18 +933,32 @@ fun OfficialExcelTableCard(
                                             .width(colW)
                                             .fillMaxHeight()
                                             .defaultMinSize(minHeight = 42.dp)
-                                            .border(0.5.dp, colors.gridBorderColor) // Uniform grid line for ALL cells
+                                            .then(cellBorderModifier)
                                             .background(cellBg)
-                                            .clickable {
-                                                if (cellText.isNotBlank()) {
-                                                    selectedCellInfo = CellDetailDialogInfo(
-                                                        columnName = colTitle,
-                                                        rowNumber = rowNum,
-                                                        fullText = cellText,
-                                                        query = result.query
-                                                    )
+                                            .combinedClickable(
+                                                onClick = {
+                                                    if (selectionState.mode == SelectionMode.CELLS) {
+                                                        if (cellText.isNotBlank()) {
+                                                            onToggleCellSelection?.invoke(cellData)
+                                                        }
+                                                    } else {
+                                                        if (cellText.isNotBlank()) {
+                                                            selectedCellInfo = CellDetailDialogInfo(
+                                                                columnName = colTitle,
+                                                                rowNumber = rowNum,
+                                                                fullText = cellText,
+                                                                query = result.query
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                onLongClick = {
+                                                    if (cellText.isNotBlank()) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        onToggleCellSelection?.invoke(cellData)
+                                                    }
                                                 }
-                                            }
+                                            )
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         contentAlignment = contentAlignment
                                     ) {

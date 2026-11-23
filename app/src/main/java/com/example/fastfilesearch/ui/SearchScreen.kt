@@ -1,6 +1,10 @@
 package com.example.fastfilesearch.ui
 
+import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -9,6 +13,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -40,8 +45,16 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -69,6 +82,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -78,6 +92,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
+import com.example.fastfilesearch.export.ExcelExporter
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
@@ -93,13 +108,22 @@ import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
 import com.example.fastfilesearch.ui.designsystem.AppTwoLineMenuIcon
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.ui.selection.CellKey
+import com.example.fastfilesearch.ui.selection.RowKey
+import com.example.fastfilesearch.ui.selection.SelectedCellData
+import com.example.fastfilesearch.ui.selection.SelectedRowData
+import com.example.fastfilesearch.ui.selection.SelectionMode
 import com.example.fastfilesearch.ui.settings.AboutScreen
 import com.example.fastfilesearch.ui.settings.PermissionsScreen
 import com.example.fastfilesearch.ui.settings.SettingsScreen
 import com.example.fastfilesearch.ui.settings.SupportedFormatsScreen
 import com.example.fastfilesearch.ui.settings.ThemeSettingsScreen
 import com.example.fastfilesearch.ui.settings.WorkspacesScreen
+import com.example.fastfilesearch.util.ValueInteractionHelper
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AppDestination {
     SEARCH,
@@ -132,8 +156,14 @@ fun SearchScreen(
     onToggleVerticalCopyFormat: (Boolean) -> Unit = {},
     onToggleExpandFullCellText: (Boolean) -> Unit = {},
     onSetAppTheme: (String) -> Unit = {},
+    onToggleRowSelection: (SelectedRowData) -> Unit = {},
+    onToggleCellSelection: (SelectedCellData) -> Unit = {},
+    onSelectAllRows: (List<SelectedRowData>) -> Unit = {},
+    onSelectAllCells: (List<SelectedCellData>) -> Unit = {},
+    onClearSelection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
@@ -141,6 +171,38 @@ fun SearchScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     var showWorkspaceSwitcherSheet by remember { mutableStateOf(false) }
     var activeRecordDetail by remember { mutableStateOf<RecordDetailData?>(null) }
+    var showSelectionExcelMenu by remember { mutableStateOf(false) }
+    var showExportAllMenu by remember { mutableStateOf(false) }
+    var pendingWorkbookToSave by remember { mutableStateOf<org.apache.poi.xssf.usermodel.XSSFWorkbook?>(null) }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    ) { uri ->
+        val wb = pendingWorkbookToSave
+        if (uri != null && wb != null) {
+            coroutineScope.launch {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { os ->
+                        ExcelExporter.writeWorkbookToStream(wb, os)
+                    }
+                    snackbarHostState.showSnackbar("تم حفظ ملف Excel بنجاح")
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("فشل حفظ الملف: ${e.message}")
+                } finally {
+                    pendingWorkbookToSave = null
+                }
+            }
+        } else {
+            wb?.close()
+            pendingWorkbookToSave = null
+        }
+    }
+
+    if (uiState.selectionState.isActive) {
+        BackHandler {
+            onClearSelection()
+        }
+    }
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -163,6 +225,74 @@ fun SearchScreen(
                     results = results
                 )
             }
+    }
+
+    val allSelectableRows = remember(groupedResults) {
+        val list = mutableListOf<SelectedRowData>()
+        groupedResults.forEach { group ->
+            if (group.isDocument) {
+                group.results.forEachIndexed { idx, res ->
+                    list.add(
+                        SelectedRowData(
+                            key = RowKey(group.fileUri, "مستند", idx),
+                            fileName = group.fileName,
+                            sheetName = "مستند",
+                            rowNumber = "${idx + 1}",
+                            cells = emptyList(),
+                            headers = emptyList(),
+                            isDocument = true,
+                            snippet = res.snippet,
+                            location = res.location
+                        )
+                    )
+                }
+            } else {
+                group.results.forEachIndexed { idx, res ->
+                    val sheet = res.sheetName ?: "ورقة 1"
+                    val cells = TableCellHelper.splitIntoCells(res.snippet)
+                    val rowNum = res.rowNumber?.toString() ?: (idx + 1).toString()
+                    list.add(
+                        SelectedRowData(
+                            key = RowKey(group.fileUri, sheet, idx),
+                            fileName = group.fileName,
+                            sheetName = sheet,
+                            rowNumber = rowNum,
+                            cells = cells,
+                            headers = res.columnHeaders,
+                            isDocument = false,
+                            snippet = res.snippet,
+                            location = res.location
+                        )
+                    )
+                }
+            }
+        }
+        list
+    }
+
+    val allSelectableCells = remember(groupedResults) {
+        val list = mutableListOf<SelectedCellData>()
+        groupedResults.filterNot { it.isDocument }.forEach { group ->
+            group.results.forEachIndexed { rIdx, res ->
+                val sheet = res.sheetName ?: "ورقة 1"
+                val cells = TableCellHelper.splitIntoCells(res.snippet)
+                val rowNum = res.rowNumber?.toString() ?: (rIdx + 1).toString()
+                cells.forEachIndexed { cIdx, cellVal ->
+                    val colName = res.columnHeaders.getOrNull(cIdx)?.takeIf { it.isNotBlank() } ?: "عمود ${cIdx + 1}"
+                    list.add(
+                        SelectedCellData(
+                            key = CellKey(group.fileUri, sheet, rIdx, cIdx),
+                            fileName = group.fileName,
+                            sheetName = sheet,
+                            rowNumber = rowNum,
+                            columnName = colName,
+                            value = cellVal
+                        )
+                    )
+                }
+            }
+        }
+        list
     }
 
     val isDark = when (uiState.appTheme) {
@@ -369,130 +499,329 @@ fun SearchScreen(
                         .background(colors.screenBackground)
                         .statusBarsPadding()
                 ) {
-                    CenterAlignedTopAppBar(
-                        title = {
-                            val topBarTitle = if (uiState.activeWorkspace != null) {
-                                uiState.activeWorkspace.name
-                            } else if (uiState.workspaces.isNotEmpty()) {
-                                "جميع المجلدات (${uiState.workspaces.size})"
-                            } else {
-                                "بحث آمن"
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { showWorkspaceSwitcherSheet = true }
-                                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = topBarTitle,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = colors.textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "اختيار المجلد",
-                                        tint = colors.textPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                if (uiState.folderUri != null || uiState.workspaces.isNotEmpty()) {
-                                    Text(
-                                        text = "${uiState.filesCount} ملف مفهرس • ${uiState.segmentsCount} مقطع",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = colors.textSecondary
-                                    )
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = { currentDestination = AppDestination.SETTINGS }) {
-                                AppTwoLineMenuIcon(
-                                    tint = colors.textPrimary
-                                )
-                            }
-                        },
-                        actions = {
-                            val isIndexing = uiState.indexProgress.isIndexing
-                            val rotation = if (isIndexing) {
-                                val infiniteTransition = rememberInfiniteTransition(label = "spin")
-                                val angle by infiniteTransition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 360f,
-                                    animationSpec = infiniteRepeatable(
-                                        animation = tween(1000, easing = FastOutSlowInEasing),
-                                        repeatMode = RepeatMode.Restart
-                                    ),
-                                    label = "spinAngle"
-                                )
-                                angle
-                            } else 0f
-
-                            val hasWorkspaces = uiState.folderUri != null || uiState.workspaces.isNotEmpty()
-                            IconButton(
-                                onClick = onRefreshClick,
-                                enabled = hasWorkspaces && !isIndexing
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "تحديث الفهرس",
-                                    modifier = Modifier.graphicsLayer { rotationZ = rotation },
-                                    tint = if (hasWorkspaces && !isIndexing)
-                                        colors.textPrimary
-                                    else
-                                        colors.textSecondary.copy(alpha = 0.38f)
-                                )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = colors.screenBackground
-                        )
-                    )
-
-                    // Indexing Progress Bar
-                    AnimatedVisibility(visible = uiState.indexProgress.isIndexing) {
-                        Column(
+                    if (uiState.selectionState.isActive) {
+                        // Contextual Selection Action Bar
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .height(56.dp)
                                 .background(colors.cardBackground)
-                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            val progress = uiState.indexProgress
-                            if (progress.total > 0) {
-                                LinearProgressIndicator(
-                                    progress = { progress.current.toFloat() / progress.total.toFloat() },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = colors.controlActiveBackground,
-                                    trackColor = colors.divider
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = colors.controlActiveBackground,
-                                    trackColor = colors.divider
+                            // Right side in RTL: Close + Count
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                IconButton(onClick = onClearSelection) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Close,
+                                        contentDescription = "إلغاء التحديد",
+                                        tint = colors.textPrimary
+                                    )
+                                }
+                                Text(
+                                    text = uiState.selectionState.getFormattedCountArabic(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = progress.statusMessage,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colors.textSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+
+                            // Left side in RTL: Action buttons (Select All, Copy, Share, Excel)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                // Select All
+                                IconButton(
+                                    onClick = {
+                                        if (uiState.selectionState.mode == SelectionMode.ROWS) {
+                                            onSelectAllRows(allSelectableRows)
+                                        } else if (uiState.selectionState.mode == SelectionMode.CELLS) {
+                                            onSelectAllCells(allSelectableCells)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.SelectAll,
+                                        contentDescription = "تحديد الكل",
+                                        tint = colors.textPrimary
+                                    )
+                                }
+
+                                // Copy
+                                IconButton(
+                                    onClick = {
+                                        val text = if (uiState.selectionState.mode == SelectionMode.ROWS) {
+                                            ValueInteractionHelper.formatMultipleRows(
+                                                uiState.selectionState.selectedRows.values.toList(),
+                                                uiState.verticalCopyFormat
+                                            )
+                                        } else {
+                                            ValueInteractionHelper.formatMultipleCells(
+                                                uiState.selectionState.selectedCells.values.toList(),
+                                                uiState.verticalCopyFormat
+                                            )
+                                        }
+                                        clipboardManager.setText(AnnotatedString(text))
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("تم نسخ ${uiState.selectionState.getFormattedCountArabic()} إلى الحافظة")
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ContentCopy,
+                                        contentDescription = "نسخ",
+                                        tint = colors.textPrimary
+                                    )
+                                }
+
+                                // Share text
+                                IconButton(
+                                    onClick = {
+                                        val text = if (uiState.selectionState.mode == SelectionMode.ROWS) {
+                                            ValueInteractionHelper.formatMultipleRows(
+                                                uiState.selectionState.selectedRows.values.toList(),
+                                                uiState.verticalCopyFormat
+                                            )
+                                        } else {
+                                            ValueInteractionHelper.formatMultipleCells(
+                                                uiState.selectionState.selectedCells.values.toList(),
+                                                uiState.verticalCopyFormat
+                                            )
+                                        }
+                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                            putExtra(Intent.EXTRA_TEXT, text)
+                                            type = "text/plain"
+                                        }
+                                        val chooser = Intent.createChooser(sendIntent, "مشاركة النص المحدد")
+                                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        context.startActivity(chooser)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Share,
+                                        contentDescription = "مشاركة نص",
+                                        tint = colors.textPrimary
+                                    )
+                                }
+
+                                // Excel Menu (Share / Save)
+                                Box {
+                                    IconButton(onClick = { showSelectionExcelMenu = true }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.TableChart,
+                                            contentDescription = "Excel",
+                                            tint = colors.textPrimary
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSelectionExcelMenu,
+                                        onDismissRequest = { showSelectionExcelMenu = false },
+                                        modifier = Modifier
+                                            .background(colors.cardBackground)
+                                            .border(0.5.dp, colors.divider, RoundedCornerShape(8.dp))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "مشاركة كملف Excel (.xlsx)",
+                                                    color = colors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Share,
+                                                    contentDescription = null,
+                                                    tint = colors.textPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showSelectionExcelMenu = false
+                                                coroutineScope.launch {
+                                                    try {
+                                                        val file = if (uiState.selectionState.mode == SelectionMode.ROWS) {
+                                                            ExcelExporter.exportRowsToCache(
+                                                                context,
+                                                                uiState.selectionState.selectedRows.values.toList()
+                                                            )
+                                                        } else {
+                                                            ExcelExporter.exportCellsToCache(
+                                                                context,
+                                                                uiState.selectionState.selectedCells.values.toList()
+                                                            )
+                                                        }
+                                                        ExcelExporter.shareExcelFile(context, file)
+                                                    } catch (e: Exception) {
+                                                        snackbarHostState.showSnackbar("فشل تصدير ملف Excel: ${e.message}")
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "حفظ كملف Excel (.xlsx)",
+                                                    color = colors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.FileDownload,
+                                                    contentDescription = null,
+                                                    tint = colors.textPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showSelectionExcelMenu = false
+                                                val wb = if (uiState.selectionState.mode == SelectionMode.ROWS) {
+                                                    ExcelExporter.buildWorkbookForRows(uiState.selectionState.selectedRows.values.toList())
+                                                } else {
+                                                    ExcelExporter.buildWorkbookForCells(uiState.selectionState.selectedCells.values.toList())
+                                                }
+                                                pendingWorkbookToSave = wb
+                                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                                                createDocumentLauncher.launch("بحث_آمن_$timestamp.xlsx")
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalDivider(color = colors.divider, thickness = 1.dp)
+                    } else {
+                        CenterAlignedTopAppBar(
+                            title = {
+                                val topBarTitle = if (uiState.activeWorkspace != null) {
+                                    uiState.activeWorkspace.name
+                                } else if (uiState.workspaces.isNotEmpty()) {
+                                    "جميع المجلدات (${uiState.workspaces.size})"
+                                } else {
+                                    "بحث آمن"
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { showWorkspaceSwitcherSheet = true }
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = topBarTitle,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = colors.textPrimary
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "اختيار المجلد",
+                                            tint = colors.textPrimary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    if (uiState.folderUri != null || uiState.workspaces.isNotEmpty()) {
+                                        Text(
+                                            text = "${uiState.filesCount} ملف مفهرس • ${uiState.segmentsCount} مقطع",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = colors.textSecondary
+                                        )
+                                    }
+                                }
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = { currentDestination = AppDestination.SETTINGS }) {
+                                    AppTwoLineMenuIcon(
+                                        tint = colors.textPrimary
+                                    )
+                                }
+                            },
+                            actions = {
+                                val isIndexing = uiState.indexProgress.isIndexing
+                                val rotation = if (isIndexing) {
+                                    val infiniteTransition = rememberInfiniteTransition(label = "spin")
+                                    val angle by infiniteTransition.animateFloat(
+                                        initialValue = 0f,
+                                        targetValue = 360f,
+                                        animationSpec = infiniteRepeatable(
+                                            animation = tween(1000, easing = FastOutSlowInEasing),
+                                            repeatMode = RepeatMode.Restart
+                                        ),
+                                        label = "spinAngle"
+                                    )
+                                    angle
+                                } else 0f
+
+                                val hasWorkspaces = uiState.folderUri != null || uiState.workspaces.isNotEmpty()
+                                IconButton(
+                                    onClick = onRefreshClick,
+                                    enabled = hasWorkspaces && !isIndexing
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "تحديث الفهرس",
+                                        modifier = Modifier.graphicsLayer { rotationZ = rotation },
+                                        tint = if (hasWorkspaces && !isIndexing)
+                                            colors.textPrimary
+                                        else
+                                            colors.textSecondary.copy(alpha = 0.38f)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = colors.screenBackground
                             )
+                        )
+
+                        // Indexing Progress Bar
+                        AnimatedVisibility(visible = uiState.indexProgress.isIndexing) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(colors.cardBackground)
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                val progress = uiState.indexProgress
+                                if (progress.total > 0) {
+                                    LinearProgressIndicator(
+                                        progress = { progress.current.toFloat() / progress.total.toFloat() },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = colors.controlActiveBackground,
+                                        trackColor = colors.divider
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp)),
+                                        color = colors.controlActiveBackground,
+                                        trackColor = colors.divider
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = progress.statusMessage,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -656,6 +985,85 @@ fun SearchScreen(
                                 color = colors.textSecondary,
                                 fontWeight = FontWeight.Medium
                             )
+
+                            if (resultCount > 0) {
+                                Box {
+                                    IconButton(
+                                        onClick = { showExportAllMenu = true },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.FileDownload,
+                                            contentDescription = "تصدير جميع النتائج كملف Excel",
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showExportAllMenu,
+                                        onDismissRequest = { showExportAllMenu = false },
+                                        modifier = Modifier
+                                            .background(colors.cardBackground)
+                                            .border(0.5.dp, colors.divider, RoundedCornerShape(8.dp))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "مشاركة كملف Excel (.xlsx)",
+                                                    color = colors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Share,
+                                                    contentDescription = null,
+                                                    tint = colors.textPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showExportAllMenu = false
+                                                coroutineScope.launch {
+                                                    try {
+                                                        val file = ExcelExporter.exportAllResultsToCache(
+                                                            context,
+                                                            uiState.searchResults
+                                                        )
+                                                        ExcelExporter.shareExcelFile(context, file)
+                                                    } catch (e: Exception) {
+                                                        snackbarHostState.showSnackbar("فشل تصدير ملف Excel: ${e.message}")
+                                                    }
+                                                }
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "حفظ كملف Excel (.xlsx)",
+                                                    color = colors.textPrimary,
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.FileDownload,
+                                                    contentDescription = null,
+                                                    tint = colors.textPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            },
+                                            onClick = {
+                                                showExportAllMenu = false
+                                                val wb = ExcelExporter.buildWorkbookForAllResults(uiState.searchResults)
+                                                pendingWorkbookToSave = wb
+                                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                                                createDocumentLauncher.launch("بحث_آمن_$timestamp.xlsx")
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         LazyColumn(
@@ -675,6 +1083,8 @@ fun SearchScreen(
                                             onOpenFile = { onOpenFile(group.fileUri) },
                                             isDark = isDark,
                                             showAllRows = uiState.showAllRows,
+                                            selectionState = uiState.selectionState,
+                                            onToggleRowSelection = onToggleRowSelection,
                                             searchFilter = uiState.searchFilter,
                                             onCopySnippet = { text ->
                                                 clipboardManager.setText(AnnotatedString(text))
@@ -693,6 +1103,9 @@ fun SearchScreen(
                                         showAllRows = uiState.showAllRows,
                                         verticalCopyFormat = uiState.verticalCopyFormat,
                                         expandFullCellText = uiState.expandFullCellText,
+                                        selectionState = uiState.selectionState,
+                                        onToggleRowSelection = onToggleRowSelection,
+                                        onToggleCellSelection = onToggleCellSelection,
                                         searchFilter = uiState.searchFilter,
                                         onOpenFile = { onOpenFile(group.fileUri) },
                                         onViewRecord = { activeRecordDetail = it },

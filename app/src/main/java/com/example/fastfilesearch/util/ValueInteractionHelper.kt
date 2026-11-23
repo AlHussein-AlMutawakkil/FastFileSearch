@@ -48,4 +48,27 @@ object ValueInteractionHelper {
             cells.filter { it.isNotBlank() }.joinToString(delimiter)
         }
     }
+
+    fun formatMultipleRows(rows: List<com.example.fastfilesearch.ui.selection.SelectedRowData>, vertical: Boolean): String {
+        val delimiter = if (vertical) "\n----------------------------------------\n" else "\n"
+        return rows.joinToString(delimiter) { row ->
+            if (row.isDocument) {
+                "${row.fileName} (${row.location}):\n${row.snippet}"
+            } else {
+                "صف ${row.rowNumber}:\n" + formatRow(row.cells, row.headers, vertical)
+            }
+        }
+    }
+
+    fun formatMultipleCells(cells: List<com.example.fastfilesearch.ui.selection.SelectedCellData>, vertical: Boolean): String {
+        val groupedByRow = cells.groupBy { "${it.fileName}_${it.sheetName}_${it.key.rowIndex}" }
+        val delimiter = if (vertical) "\n----------------------------------------\n" else "\n"
+        return groupedByRow.values.joinToString(delimiter) { cellsInRow ->
+            val first = cellsInRow.first()
+            val rowHeader = "${first.fileName} • ${first.sheetName} • صف ${first.rowNumber}:"
+            val cellParts = cellsInRow.map { "${it.columnName}: ${it.value}" }
+            val cellDelimiter = if (vertical) "\n" else " - "
+            "$rowHeader\n" + cellParts.joinToString(cellDelimiter)
+        }
+    }
 }

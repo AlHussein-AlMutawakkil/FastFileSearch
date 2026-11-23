@@ -7,9 +7,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -56,6 +60,11 @@ import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TextHighlighter
+import com.example.fastfilesearch.ui.designsystem.LocalAppColors
+import com.example.fastfilesearch.ui.selection.RowKey
+import com.example.fastfilesearch.ui.selection.SelectedRowData
+import com.example.fastfilesearch.ui.selection.SelectionMode
+import com.example.fastfilesearch.ui.selection.SelectionState
 
 data class FileResultGroup(
     val fileUri: String,
@@ -64,6 +73,7 @@ data class FileResultGroup(
     val results: List<SearchResult>
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WordPdfGroupedCard(
     group: FileResultGroup,
@@ -71,10 +81,14 @@ fun WordPdfGroupedCard(
     onCopySnippet: (String) -> Unit,
     isDark: Boolean = isSystemInDarkTheme(),
     showAllRows: Boolean = true,
+    selectionState: SelectionState = SelectionState(),
+    onToggleRowSelection: ((SelectedRowData) -> Unit)? = null,
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val appColors = LocalAppColors.current
     val visual = remember(group.fileName) { FileTypeHelper.getVisual(group.fileName) }
 
     val onShareSnippet: (String) -> Unit = remember(context) {
@@ -202,20 +216,58 @@ fun WordPdfGroupedCard(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        displayedResults.forEach { result ->
+                        displayedResults.forEachIndexed { idx, result ->
                             var isExpanded by remember { mutableStateOf(false) }
+
+                            val rowKey = remember(group.fileUri, idx) {
+                                RowKey(fileUri = group.fileUri, sheetName = "مستند", rowIndex = idx)
+                            }
+                            val isSelected = selectionState.isRowSelected(rowKey)
+                            val rowData = remember(rowKey, group.fileName, result, idx) {
+                                SelectedRowData(
+                                    key = rowKey,
+                                    fileName = group.fileName,
+                                    sheetName = "مستند",
+                                    rowNumber = "${idx + 1}",
+                                    cells = emptyList(),
+                                    headers = emptyList(),
+                                    isDocument = true,
+                                    snippet = result.snippet,
+                                    location = result.location
+                                )
+                            }
+
+                            val cardBg = if (isSelected) {
+                                appColors.textPrimary.copy(alpha = 0.08f)
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            }
+
+                            val cardBorderModifier = if (isSelected) {
+                                Modifier.border(1.5.dp, appColors.controlActiveBackground, RoundedCornerShape(8.dp))
+                            } else {
+                                Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            }
 
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                    .border(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                                        RoundedCornerShape(8.dp)
+                                    .background(cardBg)
+                                    .then(cardBorderModifier)
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (selectionState.mode == SelectionMode.ROWS) {
+                                                onToggleRowSelection?.invoke(rowData)
+                                            } else {
+                                                isExpanded = !isExpanded
+                                            }
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            onToggleRowSelection?.invoke(rowData)
+                                        }
                                     )
-                                    .clickable { isExpanded = !isExpanded }
                                     .padding(10.dp)
                             ) {
                                 Row(

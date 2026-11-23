@@ -60,6 +60,7 @@ dependencies {
     // Document & Spreadsheet parsing libraries
     implementation(libs.jxl)
     implementation(libs.pdfbox.android)
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

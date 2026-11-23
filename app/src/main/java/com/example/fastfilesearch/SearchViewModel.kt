@@ -9,6 +9,9 @@ import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.model.Workspace
 import com.example.fastfilesearch.sync.SyncScheduler
+import com.example.fastfilesearch.ui.selection.SelectedCellData
+import com.example.fastfilesearch.ui.selection.SelectedRowData
+import com.example.fastfilesearch.ui.selection.SelectionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -40,7 +43,8 @@ data class SearchUiState(
     val appTheme: String = "system",
     val isBackgroundSyncEnabled: Boolean = true,
     val searchFilter: SearchFilter = SearchFilter(),
-    val indexedFiles: List<IndexedFileRecord> = emptyList()
+    val indexedFiles: List<IndexedFileRecord> = emptyList(),
+    val selectionState: SelectionState = SelectionState()
 )
 
 @OptIn(FlowPreview::class)
@@ -257,7 +261,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onQueryChanged(newQuery: String) {
-        _uiState.update { it.copy(searchQuery = newQuery) }
+        _uiState.update { it.copy(searchQuery = newQuery, selectionState = it.selectionState.clear()) }
         searchQueryFlow.value = newQuery
     }
 
@@ -267,7 +271,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             it.copy(
                 searchQuery = "",
                 searchResults = emptyList(),
-                isSearching = false
+                isSearching = false,
+                selectionState = it.selectionState.clear()
             )
         }
         searchQueryFlow.value = ""
@@ -346,11 +351,31 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onFilterChanged(newFilter: SearchFilter) {
-        _uiState.update { it.copy(searchFilter = newFilter) }
+        _uiState.update { it.copy(searchFilter = newFilter, selectionState = it.selectionState.clear()) }
         val currentQuery = _uiState.value.searchQuery
         if (currentQuery.isNotBlank()) {
             executeSearch(currentQuery)
         }
+    }
+
+    fun toggleRowSelection(rowData: SelectedRowData) {
+        _uiState.update { it.copy(selectionState = it.selectionState.toggleRow(rowData)) }
+    }
+
+    fun toggleCellSelection(cellData: SelectedCellData) {
+        _uiState.update { it.copy(selectionState = it.selectionState.toggleCell(cellData)) }
+    }
+
+    fun selectAllRows(allRows: List<SelectedRowData>) {
+        _uiState.update { it.copy(selectionState = it.selectionState.selectAllRows(allRows)) }
+    }
+
+    fun selectAllCells(allCells: List<SelectedCellData>) {
+        _uiState.update { it.copy(selectionState = it.selectionState.selectAllCells(allCells)) }
+    }
+
+    fun clearSelection() {
+        _uiState.update { it.copy(selectionState = it.selectionState.clear()) }
     }
 
     fun onResetFilter() {

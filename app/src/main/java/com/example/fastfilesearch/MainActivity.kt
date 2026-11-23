@@ -78,7 +78,12 @@ class MainActivity : ComponentActivity() {
                             onToggleShowAllRows = { viewModel.onToggleShowAllRows(it) },
                             onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },
                             onToggleExpandFullCellText = { viewModel.onToggleExpandFullCellText(it) },
-                            onSetAppTheme = { viewModel.onSetAppTheme(it) }
+                            onSetAppTheme = { viewModel.onSetAppTheme(it) },
+                            onToggleRowSelection = { viewModel.toggleRowSelection(it) },
+                            onToggleCellSelection = { viewModel.toggleCellSelection(it) },
+                            onSelectAllRows = { viewModel.selectAllRows(it) },
+                            onSelectAllCells = { viewModel.selectAllCells(it) },
+                            onClearSelection = { viewModel.clearSelection() }
                         )
                     }
                 }
