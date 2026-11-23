@@ -265,6 +265,20 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         searchQueryFlow.value = newQuery
     }
 
+    fun onProcessTextReceived(text: String) {
+        val clean = text.trim()
+        if (clean.isBlank()) return
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                searchQuery = clean,
+                selectionState = it.selectionState.clear()
+            )
+        }
+        searchQueryFlow.value = clean
+        executeSearch(clean)
+    }
+
     fun onClearQuery() {
         searchJob?.cancel()
         _uiState.update {

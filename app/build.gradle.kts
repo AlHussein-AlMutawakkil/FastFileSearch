@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.biometric)
 
     // Document & Spreadsheet parsing libraries
     implementation(libs.jxl)

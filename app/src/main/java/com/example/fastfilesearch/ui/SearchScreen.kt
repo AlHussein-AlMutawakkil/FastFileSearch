@@ -95,6 +95,8 @@ import com.example.fastfilesearch.SearchUiState
 import com.example.fastfilesearch.export.ExcelExporter
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.security.AppLockManager
+import com.example.fastfilesearch.security.AppLockMode
 import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
 import com.example.fastfilesearch.ui.components.FileResultGroup
 import com.example.fastfilesearch.ui.components.FilterSheet
@@ -108,6 +110,7 @@ import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
 import com.example.fastfilesearch.ui.designsystem.AppTwoLineMenuIcon
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.ui.security.AppLockSettingsScreen
 import com.example.fastfilesearch.ui.selection.CellKey
 import com.example.fastfilesearch.ui.selection.RowKey
 import com.example.fastfilesearch.ui.selection.SelectedCellData
@@ -131,6 +134,7 @@ enum class AppDestination {
     WORKSPACES,
     THEME_SETTINGS,
     PERMISSIONS,
+    APP_LOCK,
     SUPPORTED_FORMATS,
     ABOUT
 }
@@ -161,6 +165,7 @@ fun SearchScreen(
     onSelectAllRows: (List<SelectedRowData>) -> Unit = {},
     onSelectAllCells: (List<SelectedCellData>) -> Unit = {},
     onClearSelection: () -> Unit = {},
+    lockManager: AppLockManager = AppLockManager.getInstance(LocalContext.current),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -209,6 +214,13 @@ fun SearchScreen(
         if (msg != null) {
             snackbarHostState.showSnackbar(msg)
             onDismissMessage()
+        }
+    }
+
+    LaunchedEffect(uiState.searchQuery) {
+        if (uiState.searchQuery.isNotBlank()) {
+            currentDestination = AppDestination.SEARCH
+            activeRecordDetail = null
         }
     }
 
@@ -329,9 +341,24 @@ fun SearchScreen(
                         onToggleBackgroundSync = onToggleBackgroundSync,
                         onNavigateToTheme = { currentDestination = AppDestination.THEME_SETTINGS },
                         onNavigateToPermissions = { currentDestination = AppDestination.PERMISSIONS },
+                        onNavigateToAppLock = { currentDestination = AppDestination.APP_LOCK },
+                        lockModeLabel = when (lockManager.lockMode) {
+                            AppLockMode.DISABLED -> "معطّل"
+                            AppLockMode.BIOMETRIC_ONLY -> "البصمة"
+                            AppLockMode.PASSCODE_ONLY -> "كلمة مرور"
+                            AppLockMode.BOTH -> "البصمة وكلمة المرور"
+                        },
                         onNavigateToSupportedFormats = { currentDestination = AppDestination.SUPPORTED_FORMATS },
                         onNavigateToAbout = { currentDestination = AppDestination.ABOUT },
                         onBack = { currentDestination = AppDestination.SEARCH }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.APP_LOCK -> {
+                    AppLockSettingsScreen(
+                        lockManager = lockManager,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
                     )
                     return@CompositionLocalProvider
                 }
@@ -582,6 +609,7 @@ fun SearchScreen(
                                 // Share text
                                 IconButton(
                                     onClick = {
+                                        lockManager.suppressNextLockOnce()
                                         val text = if (uiState.selectionState.mode == SelectionMode.ROWS) {
                                             ValueInteractionHelper.formatMultipleRows(
                                                 uiState.selectionState.selectedRows.values.toList(),
@@ -645,6 +673,7 @@ fun SearchScreen(
                                                 showSelectionExcelMenu = false
                                                 coroutineScope.launch {
                                                     try {
+                                                        lockManager.suppressNextLockOnce()
                                                         val file = if (uiState.selectionState.mode == SelectionMode.ROWS) {
                                                             ExcelExporter.exportRowsToCache(
                                                                 context,
@@ -681,6 +710,7 @@ fun SearchScreen(
                                             },
                                             onClick = {
                                                 showSelectionExcelMenu = false
+                                                lockManager.suppressNextLockOnce()
                                                 val wb = if (uiState.selectionState.mode == SelectionMode.ROWS) {
                                                     ExcelExporter.buildWorkbookForRows(uiState.selectionState.selectedRows.values.toList())
                                                 } else {
@@ -1026,6 +1056,7 @@ fun SearchScreen(
                                                 showExportAllMenu = false
                                                 coroutineScope.launch {
                                                     try {
+                                                        lockManager.suppressNextLockOnce()
                                                         val file = ExcelExporter.exportAllResultsToCache(
                                                             context,
                                                             uiState.searchResults
@@ -1055,6 +1086,7 @@ fun SearchScreen(
                                             },
                                             onClick = {
                                                 showExportAllMenu = false
+                                                lockManager.suppressNextLockOnce()
                                                 val wb = ExcelExporter.buildWorkbookForAllResults(uiState.searchResults)
                                                 pendingWorkbookToSave = wb
                                                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())

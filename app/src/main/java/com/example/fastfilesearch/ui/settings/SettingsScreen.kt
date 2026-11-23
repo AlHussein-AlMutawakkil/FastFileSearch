@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.runtime.Composable
@@ -44,6 +45,8 @@ fun SettingsScreen(
     onToggleBackgroundSync: (Boolean) -> Unit = {},
     onNavigateToTheme: () -> Unit,
     onNavigateToPermissions: () -> Unit,
+    onNavigateToAppLock: () -> Unit = {},
+    lockModeLabel: String = "معطّل",
     onNavigateToSupportedFormats: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onBack: () -> Unit,
@@ -180,6 +183,16 @@ fun SettingsScreen(
                         icon = Icons.Default.Security,
                         showChevron = false,
                         onClick = onNavigateToPermissions
+                    )
+                }
+
+                item {
+                    AppNavigationRow(
+                        title = "قفل التطبيق",
+                        value = lockModeLabel,
+                        icon = Icons.Outlined.Lock,
+                        showChevron = false,
+                        onClick = onNavigateToAppLock
                     )
                 }
 
