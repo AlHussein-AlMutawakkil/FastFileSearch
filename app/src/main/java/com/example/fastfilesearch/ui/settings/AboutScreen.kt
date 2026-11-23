@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -191,7 +192,7 @@ fun AboutScreen(
                 )
             }
 
-            // Developer Card
+            // Developer and Contact Merged Card
             AppSectionCard {
                 item {
                     Column(
@@ -200,14 +201,7 @@ fun AboutScreen(
                             .padding(horizontal = 16.dp, vertical = 15.dp)
                     ) {
                         Text(
-                            text = "المطوّر",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = colors.textSecondary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "م. الحسين المتوكل",
+                            text = "Eng. Al-Hussein Al-Mutawakel",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = colors.textPrimary
@@ -220,10 +214,14 @@ fun AboutScreen(
                         )
                     }
                 }
-            }
 
-            // Contact & Support Card
-            AppSectionCard {
+                item {
+                    HorizontalDivider(
+                        thickness = AppDesignTokens.DividerThickness,
+                        color = colors.divider
+                    )
+                }
+
                 item {
                     PhoneContactRow(
                         phoneNumber = "776472265",
@@ -291,7 +289,7 @@ fun AboutScreen(
 
             // Footer Copyright
             Text(
-                text = "© 2026 م. الحسين المتوكل. جميع الحقوق محفوظة.",
+                text = "© 2026 Eng. Al-Hussein Al-Mutawakel. جميع الحقوق محفوظة.",
                 fontSize = 12.sp,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center,

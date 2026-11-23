@@ -362,7 +362,7 @@ fun LicenseActivationScreen(
                 Spacer(modifier = Modifier.height(28.dp))
 
                 Text(
-                    text = "© 2026 م. الحسين المتوكل. جميع الحقوق محفوظة.",
+                    text = "© 2026 Eng. Al-Hussein Al-Mutawakel. جميع الحقوق محفوظة.",
                     fontSize = 12.sp,
                     color = colors.textSecondary,
                     textAlign = TextAlign.Center,

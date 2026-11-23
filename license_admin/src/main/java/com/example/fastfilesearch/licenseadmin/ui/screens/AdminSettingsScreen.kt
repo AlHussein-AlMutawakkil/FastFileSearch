@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -71,6 +72,15 @@ fun AdminSettingsScreen(
 ) {
     val context = LocalContext.current
     val colors = LocalAdminColors.current
+
+    val appVersion = remember(context) {
+        try {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            pInfo.versionName ?: "5.0.0"
+        } catch (_: Exception) {
+            "5.0.0"
+        }
+    }
 
     var hasKey by remember { mutableStateOf(KeyStorageManager.hasKey(context)) }
     var isBiometricEnabled by remember { mutableStateOf(AdminLockManager.isLockEnabled(context)) }
@@ -306,7 +316,7 @@ fun AdminSettingsScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "الإصدار 1.0 (ECDSA P-256 + KeyStore AES-256)",
+                                    text = "الإصدار $appVersion (ECDSA P-256 + KeyStore AES-256)",
                                     fontSize = 13.sp,
                                     color = colors.textSecondary
                                 )
@@ -335,6 +345,29 @@ fun AdminSettingsScreen(
                             )
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "الإصدار $appVersion",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "© 2026 Eng. Al-Hussein Al-Mutawakel. جميع الحقوق محفوظة.",
+                        fontSize = 12.sp,
+                        color = colors.textSecondary.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
