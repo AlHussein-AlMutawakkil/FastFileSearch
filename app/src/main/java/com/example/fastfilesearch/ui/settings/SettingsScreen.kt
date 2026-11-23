@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.runtime.Composable
@@ -47,6 +48,8 @@ fun SettingsScreen(
     onNavigateToPermissions: () -> Unit,
     onNavigateToAppLock: () -> Unit = {},
     lockModeLabel: String = "معطّل",
+    onNavigateToLicense: () -> Unit = {},
+    licenseLabel: String = "",
     onNavigateToSupportedFormats: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onBack: () -> Unit,
@@ -193,6 +196,16 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Lock,
                         showChevron = false,
                         onClick = onNavigateToAppLock
+                    )
+                }
+
+                item {
+                    AppNavigationRow(
+                        title = "الترخيص",
+                        value = licenseLabel,
+                        icon = Icons.Outlined.VerifiedUser,
+                        showChevron = false,
+                        onClick = onNavigateToLicense
                     )
                 }
 

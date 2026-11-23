@@ -10,16 +10,22 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.FragmentActivity
+import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.security.AppLockManager
 import com.example.fastfilesearch.ui.SearchScreen
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.ui.licensing.LicenseActivationScreen
 import com.example.fastfilesearch.ui.security.LockScreen
 import com.example.fastfilesearch.ui.theme.FastFileSearchTheme
 
@@ -27,11 +33,13 @@ class MainActivity : FragmentActivity() {
 
     private val viewModel: SearchViewModel by viewModels()
     private lateinit var lockManager: AppLockManager
+    private lateinit var licenseManager: LicenseManager
     private var pendingProcessText: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lockManager = AppLockManager.getInstance(this)
+        licenseManager = LicenseManager.getInstance(this)
         enableEdgeToEdge()
 
         handleIntent(intent)
@@ -39,6 +47,11 @@ class MainActivity : FragmentActivity() {
         setContent {
             val uiState by viewModel.uiState.collectAsState()
             val isLocked by lockManager.isLocked.collectAsState()
+            var isLicenseActive by remember { mutableStateOf(licenseManager.isLicenseActive()) }
+
+            LaunchedEffect(Unit) {
+                isLicenseActive = licenseManager.isLicenseActive()
+            }
 
             val isDark = when (uiState.appTheme) {
                 "dark" -> true
@@ -59,7 +72,19 @@ class MainActivity : FragmentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         color = colors.screenBackground
                     ) {
-                        if (isLocked) {
+                        if (!isLicenseActive) {
+                            LicenseActivationScreen(
+                                licenseManager = licenseManager,
+                                isDark = isDark,
+                                onActivationSuccess = {
+                                    isLicenseActive = true
+                                    if (!isLocked && pendingProcessText != null) {
+                                        viewModel.onProcessTextReceived(pendingProcessText!!)
+                                        pendingProcessText = null
+                                    }
+                                }
+                            )
+                        } else if (isLocked) {
                             LockScreen(
                                 lockManager = lockManager,
                                 isDark = isDark,
@@ -130,6 +155,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onStart() {
         super.onStart()
+        licenseManager.recordActivityTime()
         lockManager.onAppForegrounded()
     }
 
@@ -145,7 +171,9 @@ class MainActivity : FragmentActivity() {
             val rawText = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
             val cleanText = rawText?.trim()
             if (!cleanText.isNullOrBlank()) {
-                if (lockManager.isLocked.value) {
+                if (!licenseManager.isLicenseActive()) {
+                    pendingProcessText = cleanText
+                } else if (lockManager.isLocked.value) {
                     pendingProcessText = cleanText
                 } else {
                     viewModel.onProcessTextReceived(cleanText)

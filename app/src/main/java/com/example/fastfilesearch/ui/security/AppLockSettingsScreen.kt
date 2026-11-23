@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.fragment.app.FragmentActivity
+import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.security.AppLockManager
 import com.example.fastfilesearch.security.AppLockMode
 import com.example.fastfilesearch.security.AutoLockTimeout
@@ -110,35 +111,40 @@ fun AppLockSettingsScreen(
             }
         } else {
             // Switching to an active mode
-            val requiresBiometric = (targetMode == AppLockMode.BIOMETRIC_ONLY || targetMode == AppLockMode.BOTH)
-            val requiresPasscode = (targetMode == AppLockMode.PASSCODE_ONLY || targetMode == AppLockMode.BOTH)
-
-            val proceedWithBiometricAndPasscode = {
-                if (requiresPasscode && !lockManager.hasPasscode()) {
-                    targetModeAfterPasscodeSet = targetMode
-                    showSetPasscodeDialog = true
-                } else if (currentLockMode != AppLockMode.DISABLED && lockManager.hasPasscode()) {
-                    // Changing mode when active: verify current passcode first
-                    pendingActionAfterVerify = { lockManager.setLockMode(targetMode) }
-                    showVerifyCurrentDialog = true
-                } else {
-                    lockManager.setLockMode(targetMode)
-                }
-            }
-
-            if (requiresBiometric) {
-                if (!AppLockManager.canAuthenticateBiometric(context)) {
-                    Toast.makeText(context, "البصمة غير متوفرة أو لم يتم تسجيل بصمة على هذا الجهاز", Toast.LENGTH_LONG).show()
-                } else if (activity != null) {
-                    AppLockManager.showBiometricPrompt(
-                        activity = activity,
-                        title = "تأكيد تفعيل البصمة",
-                        onSuccess = { proceedWithBiometricAndPasscode() },
-                        onError = { Toast.makeText(context, "لم يتم تفعيل البصمة: تم إلغاء التحقق", Toast.LENGTH_SHORT).show() }
-                    )
-                }
+            val licenseManager = LicenseManager.getInstance(context)
+            if (!licenseManager.canUseAppLock()) {
+                Toast.makeText(context, "ميزة قفل التطبيق غير مشمولة في الترخيص الحالي", Toast.LENGTH_SHORT).show()
             } else {
-                proceedWithBiometricAndPasscode()
+                val requiresBiometric = (targetMode == AppLockMode.BIOMETRIC_ONLY || targetMode == AppLockMode.BOTH)
+                val requiresPasscode = (targetMode == AppLockMode.PASSCODE_ONLY || targetMode == AppLockMode.BOTH)
+
+                val proceedWithBiometricAndPasscode = {
+                    if (requiresPasscode && !lockManager.hasPasscode()) {
+                        targetModeAfterPasscodeSet = targetMode
+                        showSetPasscodeDialog = true
+                    } else if (currentLockMode != AppLockMode.DISABLED && lockManager.hasPasscode()) {
+                        // Changing mode when active: verify current passcode first
+                        pendingActionAfterVerify = { lockManager.setLockMode(targetMode) }
+                        showVerifyCurrentDialog = true
+                    } else {
+                        lockManager.setLockMode(targetMode)
+                    }
+                }
+
+                if (requiresBiometric) {
+                    if (!AppLockManager.canAuthenticateBiometric(context)) {
+                        Toast.makeText(context, "البصمة غير متوفرة أو لم يتم تسجيل بصمة على هذا الجهاز", Toast.LENGTH_LONG).show()
+                    } else if (activity != null) {
+                        AppLockManager.showBiometricPrompt(
+                            activity = activity,
+                            title = "تأكيد تفعيل البصمة",
+                            onSuccess = { proceedWithBiometricAndPasscode() },
+                            onError = { Toast.makeText(context, "لم يتم تفعيل البصمة: تم إلغاء التحقق", Toast.LENGTH_SHORT).show() }
+                        )
+                    }
+                } else {
+                    proceedWithBiometricAndPasscode()
+                }
             }
         }
     }

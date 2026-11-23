@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
@@ -69,8 +70,12 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val themePref = searchEngine.getAppTheme()
         val bgSyncPref = searchEngine.isBackgroundSyncEnabled()
 
-        if (bgSyncPref) {
+        val licenseManager = LicenseManager.getInstance(application)
+        val canBgSync = licenseManager.canUseBackgroundSync()
+        if (bgSyncPref && canBgSync) {
             SyncScheduler.schedulePeriodicSync(application)
+        } else if (!canBgSync) {
+            SyncScheduler.cancelPeriodicSync(application)
         }
 
         val displayName = activeWs?.name ?: if (workspaces.isNotEmpty()) "جميع المجلدات (${workspaces.size})" else ""
@@ -157,6 +162,15 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onAddWorkspace(uri: Uri, displayName: String = "") {
+        val licenseManager = LicenseManager.getInstance(getApplication())
+        if (!licenseManager.canAddWorkspace(_uiState.value.workspaces.size)) {
+            val max = licenseManager.getActivePayload()?.maxWorkspaces ?: 1
+            _uiState.update {
+                it.copy(userMessage = "تم بلوغ الحد الأقصى للمجلدات ($max) المسموح به في الترخيص الحالي")
+            }
+            return
+        }
+
         val newWs = searchEngine.addWorkspace(uri, displayName)
         refreshStatsAndFiles()
 
@@ -198,6 +212,17 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onToggleBackgroundSync(enabled: Boolean) {
+        val licenseManager = LicenseManager.getInstance(getApplication())
+        if (enabled && !licenseManager.canUseBackgroundSync()) {
+            _uiState.update {
+                it.copy(
+                    isBackgroundSyncEnabled = false,
+                    userMessage = "ميزة المزامنة التلقائية غير مشمولة في الترخيص الحالي"
+                )
+            }
+            SyncScheduler.cancelPeriodicSync(getApplication())
+            return
+        }
         searchEngine.setBackgroundSyncEnabled(enabled)
         _uiState.update { it.copy(isBackgroundSyncEnabled = enabled) }
         if (enabled) {
@@ -294,6 +319,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun executeSearch(query: String) {
         searchJob?.cancel()
+        LicenseManager.getInstance(getApplication()).recordActivityTime()
 
         if (query.isBlank()) {
             _uiState.update {

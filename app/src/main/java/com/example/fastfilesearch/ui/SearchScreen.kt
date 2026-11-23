@@ -93,6 +93,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
 import com.example.fastfilesearch.export.ExcelExporter
+import com.example.fastfilesearch.licensing.LicenseManager
+import com.example.fastfilesearch.licensing.LicenseStatus
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.security.AppLockManager
@@ -108,6 +110,7 @@ import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
 import com.example.fastfilesearch.ui.designsystem.AppTwoLineMenuIcon
+import com.example.fastfilesearch.ui.licensing.LicenseSettingsScreen
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
 import com.example.fastfilesearch.ui.security.AppLockSettingsScreen
@@ -136,7 +139,8 @@ enum class AppDestination {
     PERMISSIONS,
     APP_LOCK,
     SUPPORTED_FORMATS,
-    ABOUT
+    ABOUT,
+    LICENSE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,6 +170,7 @@ fun SearchScreen(
     onSelectAllCells: (List<SelectedCellData>) -> Unit = {},
     onClearSelection: () -> Unit = {},
     lockManager: AppLockManager = AppLockManager.getInstance(LocalContext.current),
+    licenseManager: LicenseManager = LicenseManager.getInstance(LocalContext.current),
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -329,6 +334,18 @@ fun SearchScreen(
 
             when (currentDestination) {
                 AppDestination.SETTINGS -> {
+                    val licenseStatus = remember(currentDestination) { licenseManager.getLicenseStatus() }
+                    val payload = remember(currentDestination) { licenseManager.getActivePayload() }
+                    val licenseLabel = when {
+                        licenseStatus != LicenseStatus.ACTIVE -> "غير مفعّل"
+                        payload == null -> "—"
+                        payload.isPermanent -> "دائم"
+                        else -> {
+                            val daysRemaining = ((payload.exp * 1000L - System.currentTimeMillis()) / (24 * 3600 * 1000L)).toInt().coerceAtLeast(0)
+                            "متبقي $daysRemaining يوماً"
+                        }
+                    }
+
                     SettingsScreen(
                         uiState = uiState,
                         onSelectFolderClick = onSelectFolderClick,
@@ -348,9 +365,20 @@ fun SearchScreen(
                             AppLockMode.PASSCODE_ONLY -> "كلمة مرور"
                             AppLockMode.BOTH -> "البصمة وكلمة المرور"
                         },
+                        onNavigateToLicense = { currentDestination = AppDestination.LICENSE },
+                        licenseLabel = licenseLabel,
                         onNavigateToSupportedFormats = { currentDestination = AppDestination.SUPPORTED_FORMATS },
                         onNavigateToAbout = { currentDestination = AppDestination.ABOUT },
                         onBack = { currentDestination = AppDestination.SEARCH }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.LICENSE -> {
+                    LicenseSettingsScreen(
+                        licenseManager = licenseManager,
+                        onBack = { currentDestination = AppDestination.SETTINGS },
+                        isDark = isDark
                     )
                     return@CompositionLocalProvider
                 }
@@ -639,7 +667,15 @@ fun SearchScreen(
 
                                 // Excel Menu (Share / Save)
                                 Box {
-                                    IconButton(onClick = { showSelectionExcelMenu = true }) {
+                                    IconButton(onClick = {
+                                        if (!licenseManager.canExportExcel()) {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar("ميزة تصدير Excel غير مشمولة في الترخيص الحالي")
+                                            }
+                                        } else {
+                                            showSelectionExcelMenu = true
+                                        }
+                                    }) {
                                         Icon(
                                             imageVector = Icons.Outlined.TableChart,
                                             contentDescription = "Excel",
@@ -1019,7 +1055,15 @@ fun SearchScreen(
                             if (resultCount > 0) {
                                 Box {
                                     IconButton(
-                                        onClick = { showExportAllMenu = true },
+                                        onClick = {
+                                            if (!licenseManager.canExportExcel()) {
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar("ميزة تصدير Excel غير مشمولة في الترخيص الحالي")
+                                                }
+                                            } else {
+                                                showExportAllMenu = true
+                                            }
+                                        },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(

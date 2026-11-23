@@ -15,3 +15,5 @@
 local.properties
 PROJECT_SNAPSHOT.md
 generate_snapshot.py
+license_tools/private_key.pem
+license_tools/*.class
