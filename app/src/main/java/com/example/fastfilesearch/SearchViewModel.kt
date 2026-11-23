@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
+import com.example.fastfilesearch.model.Workspace
+import com.example.fastfilesearch.sync.SyncScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -20,6 +22,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SearchUiState(
+    val workspaces: List<Workspace> = emptyList(),
+    val activeWorkspace: Workspace? = null,
     val folderUri: Uri? = null,
     val folderName: String = "",
     val searchQuery: String = "",
@@ -34,6 +38,7 @@ data class SearchUiState(
     val verticalCopyFormat: Boolean = true,
     val expandFullCellText: Boolean = true,
     val appTheme: String = "system",
+    val isBackgroundSyncEnabled: Boolean = true,
     val searchFilter: SearchFilter = SearchFilter(),
     val indexedFiles: List<IndexedFileRecord> = emptyList()
 )
@@ -50,41 +55,41 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private var searchJob: Job? = null
 
     init {
-        // Restore saved folder & preferences
-        val savedUri = searchEngine.getSavedFolderUri()
-        val savedName = searchEngine.getSavedFolderName()
+        // Restore preferences and workspaces
+        val workspaces = searchEngine.getAllWorkspaces()
+        val activeWs = searchEngine.getActiveWorkspace()
         val stretchPref = searchEngine.isStretchSingleColumn()
         val showAllRowsPref = searchEngine.isShowAllRows()
         val verticalCopyPref = searchEngine.isVerticalCopyFormat()
         val expandCellPref = searchEngine.isExpandFullCellText()
         val themePref = searchEngine.getAppTheme()
+        val bgSyncPref = searchEngine.isBackgroundSyncEnabled()
+
+        if (bgSyncPref) {
+            SyncScheduler.schedulePeriodicSync(application)
+        }
+
+        val displayName = activeWs?.name ?: if (workspaces.isNotEmpty()) "جميع المجلدات (${workspaces.size})" else ""
+        val activeUri = activeWs?.let { Uri.parse(it.uri) }
 
         _uiState.update {
             it.copy(
-                folderUri = savedUri,
-                folderName = savedName,
+                workspaces = workspaces,
+                activeWorkspace = activeWs,
+                folderUri = activeUri,
+                folderName = displayName,
                 stretchSingleColumn = stretchPref,
                 showAllRows = showAllRowsPref,
                 verticalCopyFormat = verticalCopyPref,
                 expandFullCellText = expandCellPref,
-                appTheme = themePref
+                appTheme = themePref,
+                isBackgroundSyncEnabled = bgSyncPref
             )
         }
 
-        // Query database stats asynchronously on IO dispatcher to avoid Main Thread blocking
-        viewModelScope.launch(Dispatchers.IO) {
-            val stats = searchEngine.getIndexStats()
-            val allFiles = searchEngine.getAllIndexedFiles()
-            _uiState.update {
-                it.copy(
-                    filesCount = stats.first,
-                    segmentsCount = stats.second,
-                    indexedFiles = allFiles
-                )
-            }
-        }
+        refreshStatsAndFiles()
 
-        // Setup debounced search query listener with collectLatest to cancel previous searches
+        // Debounced search query listener
         viewModelScope.launch {
             searchQueryFlow
                 .debounce(150L)
@@ -94,28 +99,161 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 }
         }
 
-        // Auto delta-sync on startup if a folder is already configured
-        if (savedUri != null) {
-            syncFolder(savedUri, isStartup = true)
+        // Silent incremental sync on startup if workspaces exist
+        if (workspaces.isNotEmpty()) {
+            syncIncremental(isStartup = true)
         }
     }
 
-    fun onFolderSelected(uri: Uri, displayName: String = "") {
-        searchEngine.saveFolderUri(uri, displayName)
-        val name = searchEngine.getSavedFolderName()
+    private fun refreshStatsAndFiles() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val stats = searchEngine.getIndexStats()
+            val allFiles = searchEngine.getAllIndexedFiles()
+            val currentWorkspaces = searchEngine.getAllWorkspaces()
+            val activeWs = searchEngine.getActiveWorkspace()
+            val displayName = activeWs?.name ?: if (currentWorkspaces.isNotEmpty()) "جميع المجلدات (${currentWorkspaces.size})" else ""
+
+            _uiState.update {
+                it.copy(
+                    workspaces = currentWorkspaces,
+                    activeWorkspace = activeWs,
+                    folderUri = activeWs?.let { ws -> Uri.parse(ws.uri) },
+                    folderName = displayName,
+                    filesCount = stats.first,
+                    segmentsCount = stats.second,
+                    indexedFiles = allFiles
+                )
+            }
+        }
+    }
+
+    fun onSelectWorkspace(workspaceId: String?) {
+        searchEngine.setActiveWorkspaceId(workspaceId)
+        val activeWs = searchEngine.getActiveWorkspace()
+        val displayName = activeWs?.name ?: if (_uiState.value.workspaces.isNotEmpty()) "جميع المجلدات (${_uiState.value.workspaces.size})" else ""
+
         _uiState.update {
             it.copy(
-                folderUri = uri,
-                folderName = name,
-                userMessage = "تم اختيار المجلد بنجاح"
+                activeWorkspace = activeWs,
+                folderUri = activeWs?.let { ws -> Uri.parse(ws.uri) },
+                folderName = displayName,
+                searchFilter = it.searchFilter.copy(selectedWorkspaceIds = emptySet())
             )
         }
-        syncFolder(uri)
+        refreshStatsAndFiles()
+
+        val currentQuery = _uiState.value.searchQuery
+        if (currentQuery.isNotBlank()) {
+            executeSearch(currentQuery)
+        }
+    }
+
+    fun onFolderSelected(uri: Uri, folderName: String) {
+        onAddWorkspace(uri, folderName)
+    }
+
+    fun onAddWorkspace(uri: Uri, displayName: String = "") {
+        val newWs = searchEngine.addWorkspace(uri, displayName)
+        refreshStatsAndFiles()
+
+        viewModelScope.launch {
+            try {
+                val summary = searchEngine.syncWorkspaceIncremental(newWs) { progress ->
+                    _uiState.update { it.copy(indexProgress = progress) }
+                }
+                refreshStatsAndFiles()
+                _uiState.update {
+                    it.copy(
+                        userMessage = "تمت إضافة المجلد وفهرسة ${summary.indexedCount} ملف بنجاح."
+                    )
+                }
+                val currentQuery = _uiState.value.searchQuery
+                if (currentQuery.isNotBlank()) {
+                    executeSearch(currentQuery)
+                }
+            } catch (t: Throwable) {
+                _uiState.update {
+                    it.copy(userMessage = "فشلت فهرسة المجلد الجديد: ${t.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun onRenameWorkspace(workspaceId: String, newName: String) {
+        searchEngine.renameWorkspace(workspaceId, newName)
+        refreshStatsAndFiles()
+    }
+
+    fun onDeleteWorkspace(workspaceId: String) {
+        searchEngine.deleteWorkspace(workspaceId)
+        refreshStatsAndFiles()
+        val currentQuery = _uiState.value.searchQuery
+        if (currentQuery.isNotBlank()) {
+            executeSearch(currentQuery)
+        }
+    }
+
+    fun onToggleBackgroundSync(enabled: Boolean) {
+        searchEngine.setBackgroundSyncEnabled(enabled)
+        _uiState.update { it.copy(isBackgroundSyncEnabled = enabled) }
+        if (enabled) {
+            SyncScheduler.schedulePeriodicSync(getApplication())
+        } else {
+            SyncScheduler.cancelPeriodicSync(getApplication())
+        }
     }
 
     fun onRefreshClicked() {
-        val uri = _uiState.value.folderUri ?: return
-        syncFolder(uri)
+        syncIncremental(isStartup = false)
+    }
+
+    private fun syncIncremental(isStartup: Boolean) {
+        if (_uiState.value.indexProgress.isIndexing) return
+
+        viewModelScope.launch {
+            try {
+                val activeWs = searchEngine.getActiveWorkspace()
+                val summary = if (activeWs != null) {
+                    searchEngine.syncWorkspaceIncremental(activeWs) { progress ->
+                        _uiState.update { it.copy(indexProgress = progress) }
+                    }
+                } else {
+                    searchEngine.syncAllWorkspacesIncremental { progress ->
+                        _uiState.update { it.copy(indexProgress = progress) }
+                    }
+                }
+
+                refreshStatsAndFiles()
+
+                val message: String? = when {
+                    summary.indexedCount > 0 ->
+                        "اكتملت الفهرسة: تم تحديث ${summary.indexedCount} ملف، وتخطي ${summary.skippedCount} ملف دون تغيير."
+                    summary.deletedCount > 0 ->
+                        "تم حذف ${summary.deletedCount} ملف غير موجود."
+                    isStartup ->
+                        null // Silent on startup when all files are already up to date
+                    else ->
+                        "جميع الملفات محدثة (${summary.skippedCount} ملف)."
+                }
+
+                if (message != null) {
+                    _uiState.update { it.copy(userMessage = message) }
+                }
+
+                val currentQuery = _uiState.value.searchQuery
+                if (currentQuery.isNotBlank()) {
+                    executeSearch(currentQuery)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("SearchViewModel", "Incremental sync error", t)
+                _uiState.update {
+                    it.copy(
+                        indexProgress = IndexProgress(isIndexing = false),
+                        userMessage = if (!isStartup) "فشل تحديث الفهرس: ${t.localizedMessage}" else null
+                    )
+                }
+            }
+        }
     }
 
     fun onQueryChanged(newQuery: String) {
@@ -160,7 +298,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
-                // Cancelled by a newer search request; ignore
                 throw e
             } catch (e: Exception) {
                 _uiState.update {
@@ -168,54 +305,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         searchResults = emptyList(),
                         isSearching = false,
                         userMessage = "حدث خطأ أثناء البحث: ${e.localizedMessage}"
-                    )
-                }
-            }
-        }
-    }
-
-    private fun syncFolder(uri: Uri, isStartup: Boolean = false) {
-        if (_uiState.value.indexProgress.isIndexing) return
-
-        viewModelScope.launch {
-            try {
-                val summary = searchEngine.syncFolder(uri) { progress ->
-                    _uiState.update { it.copy(indexProgress = progress) }
-                }
-
-                val stats = searchEngine.getIndexStats()
-                val allFiles = searchEngine.getAllIndexedFiles()
-                val message: String? = when {
-                    summary.indexedCount > 0 ->
-                        "اكتملت الفهرسة: تم تحديث ${summary.indexedCount} ملف، وتخطي ${summary.skippedCount} ملف دون تغيير."
-                    summary.deletedCount > 0 ->
-                        "تم حذف ${summary.deletedCount} ملف غير موجود."
-                    isStartup ->
-                        null
-                    else ->
-                        "جميع الملفات محدثة (${summary.skippedCount} ملف)."
-                }
-
-                _uiState.update {
-                    it.copy(
-                        filesCount = stats.first,
-                        segmentsCount = stats.second,
-                        indexedFiles = allFiles,
-                        userMessage = message
-                    )
-                }
-
-                // If user currently has an active query, refresh search results with updated index
-                val currentQuery = _uiState.value.searchQuery
-                if (currentQuery.isNotBlank()) {
-                    executeSearch(currentQuery)
-                }
-            } catch (t: Throwable) {
-                android.util.Log.e("SearchViewModel", "Folder sync error", t)
-                _uiState.update {
-                    it.copy(
-                        indexProgress = IndexProgress(isIndexing = false),
-                        userMessage = "فشل مزامنة المجلد: ${t.localizedMessage}"
                     )
                 }
             }

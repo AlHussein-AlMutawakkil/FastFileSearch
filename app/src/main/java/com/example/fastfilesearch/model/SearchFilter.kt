@@ -37,11 +37,13 @@ data class SearchFilter(
     val method: SearchMethod = SearchMethod.CONTAINS,
     val ignoreDiacritics: Boolean = true,
     val selectedExtensions: Set<String> = emptySet(),
-    val selectedFileUris: Set<String> = emptySet()
+    val selectedFileUris: Set<String> = emptySet(),
+    val selectedWorkspaceIds: Set<String> = emptySet()
 ) {
     val isFilterActive: Boolean
         get() = method != SearchMethod.CONTAINS ||
                 !ignoreDiacritics ||
                 selectedExtensions.isNotEmpty() ||
-                selectedFileUris.isNotEmpty()
+                selectedFileUris.isNotEmpty() ||
+                selectedWorkspaceIds.isNotEmpty()
 }

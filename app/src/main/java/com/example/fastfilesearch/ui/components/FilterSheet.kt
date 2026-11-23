@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,19 +80,27 @@ fun FilterSheet(
     val initialFilter = uiState.searchFilter
     var tempMethod by remember(initialFilter) { mutableStateOf(initialFilter.method) }
     var tempIgnoreDiacritics by remember(initialFilter) { mutableStateOf(initialFilter.ignoreDiacritics) }
+    var tempSelectedWorkspaceIds by remember(initialFilter) { mutableStateOf(initialFilter.selectedWorkspaceIds) }
     var tempSelectedExtensions by remember(initialFilter) { mutableStateOf(initialFilter.selectedExtensions) }
     var tempSelectedFileUris by remember(initialFilter) { mutableStateOf(initialFilter.selectedFileUris) }
     var fileSearchQuery by remember { mutableStateOf("") }
 
-    // Filter indexed files by selected file type extensions
-    val availableFiles = remember(uiState.indexedFiles, tempSelectedExtensions) {
-        if (tempSelectedExtensions.isEmpty()) {
-            uiState.indexedFiles
-        } else {
-            uiState.indexedFiles.filter { file ->
-                val ext = FileParserDispatcher.getExtension(file.fileName)
-                tempSelectedExtensions.contains(ext)
+    // Filter indexed files by active workspace / selected workspace and file type extensions
+    val availableFiles = remember(
+        uiState.indexedFiles,
+        uiState.activeWorkspace,
+        tempSelectedExtensions,
+        tempSelectedWorkspaceIds
+    ) {
+        uiState.indexedFiles.filter { file ->
+            val matchesWorkspace = if (uiState.activeWorkspace != null) {
+                file.workspaceId == uiState.activeWorkspace.id
+            } else {
+                tempSelectedWorkspaceIds.isEmpty() || tempSelectedWorkspaceIds.contains(file.workspaceId)
             }
+            val matchesExtension = tempSelectedExtensions.isEmpty() ||
+                    tempSelectedExtensions.contains(FileParserDispatcher.getExtension(file.fileName))
+            matchesWorkspace && matchesExtension
         }
     }
 
@@ -350,6 +359,100 @@ fun FilterSheet(
                         }
                     }
 
+                    // SECTION 3: المجلدات (Only if searching all workspaces and workspaces > 1)
+                    if (uiState.activeWorkspace == null && uiState.workspaces.size > 1) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                                .background(colors.cardBackground)
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "المجلدات",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = colors.textPrimary
+                                )
+                                if (tempSelectedWorkspaceIds.isNotEmpty()) {
+                                    Text(
+                                        text = "مسح التحديد (الكل)",
+                                        fontSize = 12.sp,
+                                        color = colors.textSecondary,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier
+                                            .clickable { tempSelectedWorkspaceIds = emptySet() }
+                                            .padding(4.dp)
+                                    )
+                                }
+                            }
+
+                            uiState.workspaces.forEach { ws ->
+                                val isWsSelected = tempSelectedWorkspaceIds.contains(ws.id)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isWsSelected) colors.subCardBackground else Color.Transparent)
+                                        .clickable {
+                                            tempSelectedWorkspaceIds = if (isWsSelected) {
+                                                tempSelectedWorkspaceIds - ws.id
+                                            } else {
+                                                tempSelectedWorkspaceIds + ws.id
+                                            }
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 9.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = colors.textPrimary
+                                        )
+                                        Text(
+                                            text = ws.name,
+                                            fontWeight = if (isWsSelected) FontWeight.Bold else FontWeight.Medium,
+                                            fontSize = 14.sp,
+                                            color = colors.textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    if (isWsSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(CircleShape)
+                                                .background(colors.controlActiveBackground),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(12.dp),
+                                                tint = colors.controlActiveContent
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // SECTION 3: اختيار الملفات (Specific Files Selection)
                     Column(
                         modifier = Modifier
@@ -531,6 +634,7 @@ fun FilterSheet(
                         onClick = {
                             tempMethod = SearchMethod.CONTAINS
                             tempIgnoreDiacritics = true
+                            tempSelectedWorkspaceIds = emptySet()
                             tempSelectedExtensions = emptySet()
                             tempSelectedFileUris = emptySet()
                             fileSearchQuery = ""
@@ -558,6 +662,7 @@ fun FilterSheet(
                                 SearchFilter(
                                     method = tempMethod,
                                     ignoreDiacritics = tempIgnoreDiacritics,
+                                    selectedWorkspaceIds = tempSelectedWorkspaceIds,
                                     selectedExtensions = tempSelectedExtensions,
                                     selectedFileUris = tempSelectedFileUris
                                 )

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -39,6 +40,8 @@ fun SettingsScreen(
     onToggleShowAllRows: (Boolean) -> Unit,
     onToggleVerticalCopyFormat: (Boolean) -> Unit,
     onToggleExpandFullCellText: (Boolean) -> Unit,
+    onNavigateToWorkspaces: () -> Unit = {},
+    onToggleBackgroundSync: (Boolean) -> Unit = {},
     onNavigateToTheme: () -> Unit,
     onNavigateToPermissions: () -> Unit,
     onNavigateToSupportedFormats: () -> Unit,
@@ -56,8 +59,10 @@ fun SettingsScreen(
         else -> "النظام"
     }
 
-    val folderDisplayName = if (uiState.folderName.isNotBlank()) {
-        uiState.folderName
+    val folderDisplayName = if (uiState.activeWorkspace != null) {
+        uiState.activeWorkspace.name
+    } else if (uiState.workspaces.isNotEmpty()) {
+        "الكل (${uiState.workspaces.size})"
     } else {
         "لم يُحدد بعد"
     }
@@ -82,15 +87,24 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // CARD 1: مجلد البحث وتحديث الفهرس
+            // CARD 1: المجلدات والمزامنة وتحديث الفهرس
             AppSectionCard {
                 item {
                     AppNavigationRow(
-                        title = "مجلد البحث",
+                        title = "المجلدات",
                         value = folderDisplayName,
                         icon = Icons.Default.FolderOpen,
                         showChevron = false,
-                        onClick = onSelectFolderClick
+                        onClick = onNavigateToWorkspaces
+                    )
+                }
+
+                item {
+                    AppToggleRow(
+                        title = "المزامنة التلقائية في الخلفية",
+                        checked = uiState.isBackgroundSyncEnabled,
+                        onCheckedChange = onToggleBackgroundSync,
+                        icon = Icons.Default.Sync
                     )
                 }
 

@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.documentfile)
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Document & Spreadsheet parsing libraries
     implementation(libs.jxl)

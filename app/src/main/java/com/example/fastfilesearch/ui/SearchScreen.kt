@@ -1,5 +1,6 @@
 package com.example.fastfilesearch.ui
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -86,11 +87,13 @@ import com.example.fastfilesearch.ui.settings.PermissionsScreen
 import com.example.fastfilesearch.ui.settings.SettingsScreen
 import com.example.fastfilesearch.ui.settings.SupportedFormatsScreen
 import com.example.fastfilesearch.ui.settings.ThemeSettingsScreen
+import com.example.fastfilesearch.ui.settings.WorkspacesScreen
 import kotlinx.coroutines.launch
 
 enum class AppDestination {
     SEARCH,
     SETTINGS,
+    WORKSPACES,
     THEME_SETTINGS,
     PERMISSIONS,
     SUPPORTED_FORMATS,
@@ -107,6 +110,11 @@ fun SearchScreen(
     onClearQuery: () -> Unit,
     onOpenFile: (String) -> Unit,
     onDismissMessage: () -> Unit,
+    onSelectWorkspace: (String?) -> Unit = {},
+    onAddWorkspace: (Uri, String) -> Unit = { _, _ -> },
+    onRenameWorkspace: (String, String) -> Unit = { _, _ -> },
+    onDeleteWorkspace: (String) -> Unit = {},
+    onToggleBackgroundSync: (Boolean) -> Unit = {},
     onFilterChanged: (SearchFilter) -> Unit = {},
     onToggleStretchSingleColumn: (Boolean) -> Unit = {},
     onToggleShowAllRows: (Boolean) -> Unit = {},
@@ -164,11 +172,25 @@ fun SearchScreen(
                         onToggleShowAllRows = onToggleShowAllRows,
                         onToggleVerticalCopyFormat = onToggleVerticalCopyFormat,
                         onToggleExpandFullCellText = onToggleExpandFullCellText,
+                        onNavigateToWorkspaces = { currentDestination = AppDestination.WORKSPACES },
+                        onToggleBackgroundSync = onToggleBackgroundSync,
                         onNavigateToTheme = { currentDestination = AppDestination.THEME_SETTINGS },
                         onNavigateToPermissions = { currentDestination = AppDestination.PERMISSIONS },
                         onNavigateToSupportedFormats = { currentDestination = AppDestination.SUPPORTED_FORMATS },
                         onNavigateToAbout = { currentDestination = AppDestination.ABOUT },
                         onBack = { currentDestination = AppDestination.SEARCH }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.WORKSPACES -> {
+                    WorkspacesScreen(
+                        uiState = uiState,
+                        onSelectWorkspace = onSelectWorkspace,
+                        onAddWorkspace = onAddWorkspace,
+                        onRenameWorkspace = onRenameWorkspace,
+                        onDeleteWorkspace = onDeleteWorkspace,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
                     )
                     return@CompositionLocalProvider
                 }
@@ -184,7 +206,7 @@ fun SearchScreen(
 
                 AppDestination.PERMISSIONS -> {
                     PermissionsScreen(
-                        folderUri = uiState.folderUri,
+                        folderUri = uiState.folderUri ?: uiState.workspaces.firstOrNull()?.let { Uri.parse(it.uri) },
                         onSelectFolderClick = onSelectFolderClick,
                         onBack = { currentDestination = AppDestination.SETTINGS }
                     )
@@ -237,16 +259,23 @@ fun SearchScreen(
                 ) {
                     CenterAlignedTopAppBar(
                         title = {
+                            val topBarTitle = if (uiState.activeWorkspace != null) {
+                                uiState.activeWorkspace.name
+                            } else if (uiState.workspaces.isNotEmpty()) {
+                                "جميع المجلدات (${uiState.workspaces.size})"
+                            } else {
+                                "البحث السريع في الملفات"
+                            }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = if (uiState.folderName.isNotBlank()) uiState.folderName else "البحث السريع في الملفات",
+                                    text = topBarTitle,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     color = colors.textPrimary
                                 )
-                                if (uiState.folderUri != null) {
+                                if (uiState.folderUri != null || uiState.workspaces.isNotEmpty()) {
                                     Text(
                                         text = "${uiState.filesCount} ملف مفهرس • ${uiState.segmentsCount} مقطع",
                                         style = MaterialTheme.typography.bodySmall,
@@ -280,15 +309,16 @@ fun SearchScreen(
                                 angle
                             } else 0f
 
+                            val hasWorkspaces = uiState.folderUri != null || uiState.workspaces.isNotEmpty()
                             IconButton(
                                 onClick = onRefreshClick,
-                                enabled = uiState.folderUri != null && !isIndexing
+                                enabled = hasWorkspaces && !isIndexing
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "تحديث الفهرس",
                                     modifier = Modifier.graphicsLayer { rotationZ = rotation },
-                                    tint = if (uiState.folderUri != null && !isIndexing)
+                                    tint = if (hasWorkspaces && !isIndexing)
                                         colors.textPrimary
                                     else
                                         colors.textSecondary.copy(alpha = 0.38f)
@@ -453,8 +483,9 @@ fun SearchScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Content View depending on State
+                val hasWorkspaces = uiState.folderUri != null || uiState.workspaces.isNotEmpty()
                 when {
-                    uiState.folderUri == null -> {
+                    !hasWorkspaces -> {
                         Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                             EmptyFolderPrompt(onSelectFolderClick = onSelectFolderClick)
                         }
@@ -463,7 +494,7 @@ fun SearchScreen(
                     uiState.searchQuery.isBlank() -> {
                         Box(modifier = Modifier.padding(horizontal = 14.dp)) {
                             ReadyToSearchPrompt(
-                                folderName = uiState.folderName,
+                                folderName = if (uiState.folderName.isNotBlank()) uiState.folderName else "جميع المجلدات",
                                 filesCount = uiState.filesCount,
                                 segmentsCount = uiState.segmentsCount
                             )

@@ -2,6 +2,7 @@ package com.example.fastfilesearch.model
 
 data class IndexedFileRecord(
     val uri: String,
+    val workspaceId: String = "",
     val fileName: String,
     val mimeType: String?,
     val size: Long,
@@ -11,6 +12,7 @@ data class IndexedFileRecord(
 
 data class FileSegment(
     val fileUri: String,
+    val workspaceId: String = "",
     val fileName: String,
     val location: String,
     val content: String,
@@ -20,6 +22,7 @@ data class FileSegment(
 data class SearchResult(
     val id: Long = 0,
     val fileUri: String,
+    val workspaceId: String = "",
     val fileName: String,
     val location: String,
     val snippet: String,
