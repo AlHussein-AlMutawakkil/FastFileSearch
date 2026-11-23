@@ -70,7 +70,6 @@ import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppTopBar
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
-import com.example.fastfilesearch.util.DeviceInfoHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -249,50 +248,7 @@ fun LicenseSettingsScreen(
                         }
                     }
 
-                    // CARD 3: بيانات الجهاز والإصدار
-                    AppSectionCard {
-                        item {
-                            AppNavigationRow(
-                                title = "إصدار التطبيق",
-                                value = DeviceInfoHelper.getAppVersion(context),
-                                showChevron = false
-                            )
-                        }
-
-                        item {
-                            AppNavigationRow(
-                                title = "نوع الهاتف",
-                                value = DeviceInfoHelper.getManufacturer(),
-                                showChevron = false
-                            )
-                        }
-
-                        item {
-                            AppNavigationRow(
-                                title = "موديل الهاتف",
-                                value = DeviceInfoHelper.getModel(),
-                                showChevron = false
-                            )
-                        }
-
-                        item {
-                            AppNavigationRow(
-                                title = "إصدار النظام",
-                                value = DeviceInfoHelper.getOsVersion(),
-                                showChevron = false
-                            )
-                        }
-
-                        item {
-                            AppNavigationRow(
-                                title = "معمارية الجهاز",
-                                value = DeviceInfoHelper.getCpuAbi(),
-                                showChevron = false
-                            )
-                        }
-                    }
-
-                    // CARD 4: خيار تحديث / تجديد كود الترخيص
+                    // CARD 3: خيار تحديث / تجديد كود الترخيص
                     AppSectionCard {
                         item {
                             AppNavigationRow(

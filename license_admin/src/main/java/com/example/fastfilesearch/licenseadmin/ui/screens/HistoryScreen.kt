@@ -83,7 +83,9 @@ fun HistoryScreen(
             val q = searchQuery.trim().lowercase(Locale.ROOT)
             historyList.filter {
                 (it.clientName?.lowercase(Locale.ROOT)?.contains(q) == true) ||
-                        it.installationId.lowercase(Locale.ROOT).contains(q)
+                        it.installationId.lowercase(Locale.ROOT).contains(q) ||
+                        it.manufacturer.lowercase(Locale.ROOT).contains(q) ||
+                        it.model.lowercase(Locale.ROOT).contains(q)
             }
         }
     }
@@ -374,6 +376,35 @@ fun HistoryItemCard(
                 if (item.excelExport) PermissionTag(text = "Excel")
                 if (item.appLock) PermissionTag(text = "قفل")
                 if (item.bgSync) PermissionTag(text = "مزامنة")
+            }
+        }
+
+        // Client Device Info (if available)
+        if (item.manufacturer.isNotBlank() || item.model.isNotBlank() || item.osVersion.isNotBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(colors.subCardBackground)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val devName = listOf(item.manufacturer, item.model).filter { it.isNotBlank() }.joinToString(" ")
+                Text(
+                    text = if (devName.isNotBlank()) devName else "جهاز العميل",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = colors.textPrimary
+                )
+                val extra = listOf(item.osVersion, item.appVersion).filter { it.isNotBlank() }.joinToString(" • ")
+                if (extra.isNotBlank()) {
+                    Text(
+                        text = extra,
+                        fontSize = 11.sp,
+                        color = colors.textSecondary
+                    )
+                }
             }
         }
 

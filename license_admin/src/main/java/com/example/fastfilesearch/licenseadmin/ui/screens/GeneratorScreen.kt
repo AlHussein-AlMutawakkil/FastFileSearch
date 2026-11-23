@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.licenseadmin.R
 import com.example.fastfilesearch.licenseadmin.engine.AdminLicenseGenerator
+import com.example.fastfilesearch.licenseadmin.engine.ClientDeviceInfo
 import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
 import com.example.fastfilesearch.licenseadmin.history.LicenseHistoryManager
 import com.example.fastfilesearch.licenseadmin.security.KeyStorageManager
@@ -100,7 +101,19 @@ fun GeneratorScreen(
     var pastedKeyText by remember { mutableStateOf("") }
 
     var installationId by remember { mutableStateOf("") }
+    var clientDeviceInfo by remember { mutableStateOf<ClientDeviceInfo?>(null) }
     var clientName by remember { mutableStateOf("") }
+    var generatedCode by remember { mutableStateOf<String?>(null) }
+    var generationError by remember { mutableStateOf<String?>(null) }
+
+    fun handleInstallationInput(input: String) {
+        val parsed = AdminLicenseGenerator.parseActivationRequest(input)
+        installationId = parsed.installationId
+        if (parsed.deviceInfo != null) {
+            clientDeviceInfo = parsed.deviceInfo
+        }
+        generationError = null
+    }
 
     val durationOptions = remember {
         listOf(
@@ -119,9 +132,6 @@ fun GeneratorScreen(
     var excelExport by remember { mutableStateOf(true) }
     var appLock by remember { mutableStateOf(true) }
     var bgSync by remember { mutableStateOf(true) }
-
-    var generatedCode by remember { mutableStateOf<String?>(null) }
-    var generationError by remember { mutableStateOf<String?>(null) }
 
     fun processUri(uri: Uri?) {
         if (uri == null) return
@@ -252,11 +262,10 @@ fun GeneratorScreen(
                     AppTextField(
                         value = installationId,
                         onValueChange = {
-                            installationId = AdminLicenseGenerator.extractInstallationId(it)
-                            generationError = null
+                            handleInstallationInput(it)
                         },
                         label = "معرّف التثبيت (Installation ID) *",
-                        placeholder = "مثال: BA-A2B3-C4D5-E6F7",
+                        placeholder = "مثال: BA-A2B3-C4D5-E6F7 أو كود الطلب BAR1...",
                         isMonospace = true,
                         trailingIcon = {
                             IconButton(
@@ -265,8 +274,7 @@ fun GeneratorScreen(
                                     val item = clipboard?.primaryClip?.getItemAt(0)
                                     val text = item?.text?.toString()?.trim()
                                     if (!text.isNullOrBlank()) {
-                                        installationId = AdminLicenseGenerator.extractInstallationId(text)
-                                        generationError = null
+                                        handleInstallationInput(text)
                                     }
                                 },
                                 modifier = Modifier.size(36.dp)
@@ -280,6 +288,43 @@ fun GeneratorScreen(
                             }
                         }
                     )
+
+                    // Client Device Info Card (displayed if request contained device info)
+                    if (clientDeviceInfo != null && clientDeviceInfo?.isAvailable == true) {
+                        val dev = clientDeviceInfo!!
+                        AppSectionCard {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    Text(
+                                        text = "بيانات جهاز العميل",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.textPrimary
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    if (dev.manufacturer.isNotBlank()) {
+                                        DeviceDetailRow(title = "نوع الهاتف", value = dev.manufacturer)
+                                    }
+                                    if (dev.model.isNotBlank()) {
+                                        DeviceDetailRow(title = "موديل الهاتف", value = dev.model)
+                                    }
+                                    if (dev.osVersion.isNotBlank()) {
+                                        DeviceDetailRow(title = "إصدار النظام", value = dev.osVersion)
+                                    }
+                                    if (dev.abi.isNotBlank()) {
+                                        DeviceDetailRow(title = "المعمارية", value = dev.abi)
+                                    }
+                                    if (dev.appVersion.isNotBlank()) {
+                                        DeviceDetailRow(title = "إصدار التطبيق", value = dev.appVersion)
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // 2. Client Name Field
                     AppTextField(
@@ -445,7 +490,12 @@ fun GeneratorScreen(
                                         excelExport = payload.ex == 1,
                                         appLock = payload.lk == 1,
                                         bgSync = payload.bg == 1,
-                                        licenseCode = code
+                                        licenseCode = code,
+                                        manufacturer = clientDeviceInfo?.manufacturer ?: "",
+                                        model = clientDeviceInfo?.model ?: "",
+                                        osVersion = clientDeviceInfo?.osVersion ?: "",
+                                        abi = clientDeviceInfo?.abi ?: "",
+                                        appVersion = clientDeviceInfo?.appVersion ?: ""
                                     )
                                 )
                                 Toast.makeText(context, "تم توليد وتوثيق كود الترخيص بنجاح!", Toast.LENGTH_SHORT).show()
@@ -724,5 +774,29 @@ fun LicenseOutputCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceDetailRow(title: String, value: String) {
+    val colors = LocalAdminColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 12.sp,
+            color = colors.textSecondary
+        )
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = colors.textPrimary
+        )
     }
 }

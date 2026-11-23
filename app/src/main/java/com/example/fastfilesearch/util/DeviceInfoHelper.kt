@@ -2,7 +2,8 @@ package com.example.fastfilesearch.util
 
 import android.content.Context
 import android.os.Build
-import androidx.core.content.pm.PackageInfoCompat
+import java.nio.charset.StandardCharsets
+import java.util.Base64
 import java.util.Locale
 
 object DeviceInfoHelper {
@@ -51,17 +52,26 @@ object DeviceInfoHelper {
         return Build.SUPPORTED_ABIS.firstOrNull() ?: "غير محدد"
     }
 
-    fun buildActivationRequestMessage(context: Context, installationId: String): String {
-        val device = getDeviceDisplayName()
+    /**
+     * Builds a compact JSON payload of device and installation details
+     * and encodes it with Base64 URL_SAFE (without padding) prefixed with "BAR1."
+     */
+    fun buildEncodedActivationRequest(context: Context, installationId: String): String {
+        val m = getManufacturer()
+        val d = getModel()
         val os = getOsVersion()
-        val app = getAppVersion(context)
-        return """
-            السلام عليكم ورحمة الله،
-            طلب تفعيل تطبيق «بحث آمن»:
-            • معرّف التثبيت: $installationId
-            • نوع وموديل الهاتف: $device
-            • إصدار النظام: $os
-            • إصدار التطبيق: $app
-        """.trimIndent()
+        val abi = getCpuAbi()
+        val v = getAppVersion(context)
+
+        fun escapeJson(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+
+        val json = """{"id":"${escapeJson(installationId)}","m":"${escapeJson(m)}","d":"${escapeJson(d)}","os":"${escapeJson(os)}","abi":"${escapeJson(abi)}","v":"${escapeJson(v)}"}"""
+        val encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(StandardCharsets.UTF_8))
+        return "BAR1.$encoded"
+    }
+
+    fun buildActivationRequestMessage(context: Context, installationId: String): String {
+        val requestCode = buildEncodedActivationRequest(context, installationId)
+        return "طلب تفعيل تطبيق «بحث آمن»:\n$requestCode"
     }
 }

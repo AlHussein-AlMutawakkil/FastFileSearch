@@ -155,4 +155,35 @@ class AdminGeneratorTest {
         val lowercaseDirect = "ba-1234-5678-abcd"
         assertEquals("BA-1234-5678-ABCD", AdminLicenseGenerator.extractInstallationId(lowercaseDirect))
     }
+
+    @Test
+    fun testParseActivationRequestWithBar1Code() {
+        val json = """{"id":"BA-9999-AAAA-BBBB","m":"Samsung","d":"Galaxy S21","os":"Android 13 (API 33)","abi":"arm64-v8a","v":"5.0.0"}"""
+        val encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(StandardCharsets.UTF_8))
+        val bar1Code = "BAR1.$encoded"
+        val message = "السلام عليكم،\nطلب تفعيل تطبيق «بحث آمن»:\n$bar1Code\nشكراً"
+
+        val parsed = AdminLicenseGenerator.parseActivationRequest(message)
+        assertEquals("BA-9999-AAAA-BBBB", parsed.installationId)
+        assertNotNull("Device info must be present", parsed.deviceInfo)
+        val dev = parsed.deviceInfo!!
+        assertEquals("Samsung", dev.manufacturer)
+        assertEquals("Galaxy S21", dev.model)
+        assertEquals("Android 13 (API 33)", dev.osVersion)
+        assertEquals("arm64-v8a", dev.abi)
+        assertEquals("5.0.0", dev.appVersion)
+    }
+
+    @Test
+    fun testParseActivationRequestBackwardCompatibility() {
+        val rawId = "BA-1234-5678-ABCD"
+        val parsed = AdminLicenseGenerator.parseActivationRequest(rawId)
+        assertEquals("BA-1234-5678-ABCD", parsed.installationId)
+        assertEquals(null, parsed.deviceInfo)
+
+        val messageWithoutBar1 = "معرّف جهازي هو: BA-1111-2222-3333 يرجى التفعيل"
+        val parsedFromMsg = AdminLicenseGenerator.parseActivationRequest(messageWithoutBar1)
+        assertEquals("BA-1111-2222-3333", parsedFromMsg.installationId)
+        assertEquals(null, parsedFromMsg.deviceInfo)
+    }
 }

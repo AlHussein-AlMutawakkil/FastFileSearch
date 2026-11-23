@@ -171,14 +171,15 @@ fun LicenseActivationScreen(
                                 ) {
                                     IconButton(
                                         onClick = {
-                                            clipboardManager.setText(AnnotatedString(installationId))
-                                            Toast.makeText(context, "تم نسخ معرّف التثبيت", Toast.LENGTH_SHORT).show()
+                                            val requestCode = DeviceInfoHelper.buildEncodedActivationRequest(context, installationId)
+                                            clipboardManager.setText(AnnotatedString(requestCode))
+                                            Toast.makeText(context, "تم نسخ كود طلب التفعيل", Toast.LENGTH_SHORT).show()
                                         },
                                         modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Outlined.ContentCopy,
-                                            contentDescription = "نسخ المعرّف",
+                                            contentDescription = "نسخ كود الطلب",
                                             tint = colors.textSecondary,
                                             modifier = Modifier.size(19.dp)
                                         )
@@ -205,62 +206,6 @@ fun LicenseActivationScreen(
                                         )
                                     }
                                 }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(
-                                thickness = AppDesignTokens.DividerThickness,
-                                color = colors.divider
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Secondary Device & Version Info
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "نوع الهاتف والموديل",
-                                    fontSize = 12.sp,
-                                    color = colors.textSecondary
-                                )
-                                Text(
-                                    text = DeviceInfoHelper.getDeviceDisplayName(),
-                                    fontSize = 12.sp,
-                                    color = colors.textPrimary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "إصدار النظام",
-                                    fontSize = 12.sp,
-                                    color = colors.textSecondary
-                                )
-                                Text(
-                                    text = DeviceInfoHelper.getOsVersionShort(),
-                                    fontSize = 12.sp,
-                                    color = colors.textPrimary
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "إصدار التطبيق",
-                                    fontSize = 12.sp,
-                                    color = colors.textSecondary
-                                )
-                                Text(
-                                    text = DeviceInfoHelper.getAppVersion(context),
-                                    fontSize = 12.sp,
-                                    color = colors.textPrimary
-                                )
                             }
                         }
                     }

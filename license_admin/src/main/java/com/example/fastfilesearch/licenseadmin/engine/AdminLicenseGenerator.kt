@@ -22,25 +22,103 @@ data class AdminLicensePayload(
     val bg: Int = 1
 )
 
+data class ClientDeviceInfo(
+    val manufacturer: String = "",
+    val model: String = "",
+    val osVersion: String = "",
+    val abi: String = "",
+    val appVersion: String = ""
+) {
+    val isAvailable: Boolean
+        get() = manufacturer.isNotBlank() || model.isNotBlank() || osVersion.isNotBlank() || abi.isNotBlank() || appVersion.isNotBlank()
+}
+
+data class ParsedActivationRequest(
+    val installationId: String,
+    val deviceInfo: ClientDeviceInfo? = null
+)
+
 object AdminLicenseGenerator {
 
     private const val PREFIX = "BA1"
     private val INSTALLATION_ID_REGEX = Regex("""BA-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}""", RegexOption.IGNORE_CASE)
+    private val BAR1_REGEX = Regex("""BAR1\.([A-Za-z0-9_-]+)""")
+
+    /**
+     * Parses activation request input.
+     * 1) First checks for BAR1.<base64> pattern, decodes Base64Url, and extracts installationId + ClientDeviceInfo.
+     * 2) If not found, falls back to BA-XXXX-XXXX-XXXX pattern (backward compatibility).
+     * 3) If neither matches, returns trimmed input with null device info.
+     */
+    fun parseActivationRequest(rawInput: String): ParsedActivationRequest {
+        val bar1Match = BAR1_REGEX.find(rawInput)
+        if (bar1Match != null) {
+            val base64Payload = bar1Match.groupValues[1]
+            try {
+                val decodedBytes = Base64.getUrlDecoder().decode(base64Payload)
+                val json = String(decodedBytes, StandardCharsets.UTF_8)
+
+                fun extractField(key: String): String {
+                    val p = Regex(""""$key"\s*:\s*"((?:\\.|[^"\\])*)"""")
+                    val m = p.find(json) ?: return ""
+                    return m.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
+                }
+
+                val id = extractField("id")
+                val m = extractField("m")
+                val d = extractField("d")
+                val os = extractField("os")
+                val abi = extractField("abi")
+                val v = extractField("v")
+
+                val cleanId = if (id.isNotBlank()) cleanInstallationId(id) else ""
+                val devInfo = ClientDeviceInfo(
+                    manufacturer = m,
+                    model = d,
+                    osVersion = os,
+                    abi = abi,
+                    appVersion = v
+                )
+
+                if (cleanId.isNotBlank()) {
+                    return ParsedActivationRequest(
+                        installationId = cleanId,
+                        deviceInfo = if (devInfo.isAvailable) devInfo else null
+                    )
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Backward compatibility fallback to plain BA-XXXX-XXXX-XXXX
+        val idMatch = INSTALLATION_ID_REGEX.find(rawInput)
+        if (idMatch != null) {
+            return ParsedActivationRequest(
+                installationId = idMatch.value.uppercase(Locale.ROOT),
+                deviceInfo = null
+            )
+        }
+
+        return ParsedActivationRequest(
+            installationId = rawInput.trim(),
+            deviceInfo = null
+        )
+    }
 
     /**
      * Extracts installation ID matching BA-XXXX-XXXX-XXXX from text (e.g. from WhatsApp message)
      * If found, returns it in uppercase; otherwise returns the trimmed input text.
      */
     fun extractInstallationId(rawText: String): String {
-        val match = INSTALLATION_ID_REGEX.find(rawText)
-        return match?.value?.uppercase(Locale.ROOT) ?: rawText.trim()
+        return parseActivationRequest(rawText).installationId
     }
 
     /**
      * Cleans installation ID: removes whitespace and converts to uppercase.
      */
     fun cleanInstallationId(rawId: String): String {
-        return extractInstallationId(rawId).replace("\\s+".toRegex(), "").uppercase(Locale.ROOT)
+        val idMatch = INSTALLATION_ID_REGEX.find(rawId)
+        val candidate = idMatch?.value ?: rawId
+        return candidate.replace("\\s+".toRegex(), "").uppercase(Locale.ROOT)
     }
 
     /**

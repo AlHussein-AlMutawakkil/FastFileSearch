@@ -13,7 +13,12 @@ data class IssuedLicenseItem(
     val excelExport: Boolean,
     val appLock: Boolean,
     val bgSync: Boolean,
-    val licenseCode: String
+    val licenseCode: String,
+    val manufacturer: String = "",
+    val model: String = "",
+    val osVersion: String = "",
+    val abi: String = "",
+    val appVersion: String = ""
 )
 
 object LicenseHistoryManager {
@@ -80,6 +85,11 @@ object LicenseHistoryManager {
             sb.append("\"lk\":").append(if (item.appLock) 1 else 0).append(",")
             sb.append("\"bg\":").append(if (item.bgSync) 1 else 0).append(",")
             sb.append("\"code\":\"").append(escape(item.licenseCode)).append("\"")
+            if (item.manufacturer.isNotBlank()) sb.append(",\"m\":\"").append(escape(item.manufacturer)).append("\"")
+            if (item.model.isNotBlank()) sb.append(",\"d\":\"").append(escape(item.model)).append("\"")
+            if (item.osVersion.isNotBlank()) sb.append(",\"os\":\"").append(escape(item.osVersion)).append("\"")
+            if (item.abi.isNotBlank()) sb.append(",\"abi\":\"").append(escape(item.abi)).append("\"")
+            if (item.appVersion.isNotBlank()) sb.append(",\"v\":\"").append(escape(item.appVersion)).append("\"")
             sb.append("}")
             if (index < list.size - 1) sb.append(",")
         }
@@ -120,6 +130,11 @@ object LicenseHistoryManager {
             val lk = getInt("lk") == 1
             val bg = getInt("bg") == 1
             val code = getStr("code")
+            val manufacturer = getStr("m")
+            val model = getStr("d")
+            val osVersion = getStr("os")
+            val abi = getStr("abi")
+            val appVersion = getStr("v")
 
             if (code.isNotBlank()) {
                 result.add(
@@ -133,7 +148,12 @@ object LicenseHistoryManager {
                         excelExport = ex,
                         appLock = lk,
                         bgSync = bg,
-                        licenseCode = code
+                        licenseCode = code,
+                        manufacturer = manufacturer,
+                        model = model,
+                        osVersion = osVersion,
+                        abi = abi,
+                        appVersion = appVersion
                     )
                 )
             }
