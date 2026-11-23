@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,18 +32,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -80,6 +86,10 @@ import com.example.fastfilesearch.ui.components.NoResultsPrompt
 import com.example.fastfilesearch.ui.components.OfficialExcelTableCard
 import com.example.fastfilesearch.ui.components.ReadyToSearchPrompt
 import com.example.fastfilesearch.ui.components.WordPdfGroupedCard
+import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
+import com.example.fastfilesearch.ui.designsystem.AppSectionCard
+import com.example.fastfilesearch.ui.designsystem.AppSelectableRow
+import com.example.fastfilesearch.ui.designsystem.AppTwoLineMenuIcon
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
 import com.example.fastfilesearch.ui.settings.AboutScreen
@@ -128,6 +138,7 @@ fun SearchScreen(
     val coroutineScope = rememberCoroutineScope()
     var currentDestination by rememberSaveable { mutableStateOf(AppDestination.SEARCH) }
     var showFilterSheet by remember { mutableStateOf(false) }
+    var showWorkspaceSwitcherSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.userMessage) {
         val msg = uiState.userMessage
@@ -246,6 +257,95 @@ fun SearchScreen(
                 )
             }
 
+            // Quick Workspace Switcher Bottom Sheet matching the reference image
+            if (showWorkspaceSwitcherSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showWorkspaceSwitcherSheet = false },
+                    containerColor = colors.cardBackground,
+                    shape = RoundedCornerShape(
+                        topStart = AppDesignTokens.BottomSheetCornerRadius,
+                        topEnd = AppDesignTokens.BottomSheetCornerRadius
+                    ),
+                    dragHandle = {
+                        Box(
+                            modifier = Modifier
+                                .padding(vertical = 10.dp)
+                                .width(42.dp)
+                                .height(4.5.dp)
+                                .clip(CircleShape)
+                                .background(colors.divider)
+                        )
+                    }
+                ) {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(colors.cardBackground)
+                                .navigationBarsPadding()
+                        ) {
+                            // Header: Title on right, Close (×) on left
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "اختيار المجلد",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.textPrimary
+                                )
+                                IconButton(
+                                    onClick = { showWorkspaceSwitcherSheet = false },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "إغلاق",
+                                        tint = colors.textSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            // "جميع المجلدات" option
+                            WorkspaceSwitcherItem(
+                                title = "جميع المجلدات",
+                                isSelected = uiState.activeWorkspace == null,
+                                onClick = {
+                                    onSelectWorkspace(null)
+                                    showWorkspaceSwitcherSheet = false
+                                }
+                            )
+
+                            // List of configured workspaces separated by clean thin dividers
+                            uiState.workspaces.forEach { ws ->
+                                HorizontalDivider(
+                                    color = colors.divider,
+                                    thickness = AppDesignTokens.DividerThickness,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                                WorkspaceSwitcherItem(
+                                    title = ws.name,
+                                    isSelected = uiState.activeWorkspace?.id == ws.id,
+                                    onClick = {
+                                        onSelectWorkspace(ws.id)
+                                        showWorkspaceSwitcherSheet = false
+                                    }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+                        }
+                    }
+                }
+            }
+
             Scaffold(
                 modifier = modifier.fillMaxSize(),
                 containerColor = colors.screenBackground,
@@ -267,14 +367,30 @@ fun SearchScreen(
                                 "البحث السريع في الملفات"
                             }
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(
-                                    text = topBarTitle,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = colors.textPrimary
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { showWorkspaceSwitcherSheet = true }
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = topBarTitle,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 18.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = colors.textPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "اختيار المجلد",
+                                        tint = colors.textPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                                 if (uiState.folderUri != null || uiState.workspaces.isNotEmpty()) {
                                     Text(
                                         text = "${uiState.filesCount} ملف مفهرس • ${uiState.segmentsCount} مقطع",
@@ -286,9 +402,7 @@ fun SearchScreen(
                         },
                         navigationIcon = {
                             IconButton(onClick = { currentDestination = AppDestination.SETTINGS }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "الإعدادات",
+                                AppTwoLineMenuIcon(
                                     tint = colors.textPrimary
                                 )
                             }
@@ -433,7 +547,7 @@ fun SearchScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = colors.textPrimary
                                 )
                             } else if (uiState.searchQuery.isNotEmpty()) {
                                 IconButton(
@@ -462,7 +576,7 @@ fun SearchScreen(
                                 imageVector = Icons.Default.FilterList,
                                 contentDescription = "التصفية",
                                 modifier = Modifier.size(26.dp),
-                                tint = if (isFilterActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                tint = colors.textPrimary
                             )
                             if (isFilterActive) {
                                 Box(
@@ -471,7 +585,7 @@ fun SearchScreen(
                                         .align(Alignment.TopEnd)
                                         .offset(x = 1.dp, y = (-1).dp)
                                         .background(
-                                            color = MaterialTheme.colorScheme.primary,
+                                            color = colors.controlActiveBackground,
                                             shape = CircleShape
                                         )
                                 )
@@ -585,4 +699,47 @@ fun SearchScreen(
         }
     }
 }
+}
+
+@Composable
+private fun WorkspaceSwitcherItem(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalAppColors.current
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            fontSize = 16.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = colors.textPrimary
+        )
+
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(colors.controlActiveBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = colors.controlActiveContent,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
 }

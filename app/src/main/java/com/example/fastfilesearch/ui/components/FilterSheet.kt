@@ -182,7 +182,7 @@ fun FilterSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = false)
-                        .heightIn(max = 520.dp)
+                        .heightIn(max = 660.dp)
                         .verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
@@ -552,7 +552,7 @@ fun FilterSheet(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 200.dp)
+                                    .heightIn(min = 160.dp, max = 340.dp)
                                     .verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
@@ -572,9 +572,9 @@ fun FilterSheet(
                                                     tempSelectedFileUris + file.uri
                                                 }
                                             }
-                                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                                            .padding(horizontal = 10.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Icon(
                                             imageVector = visual.icon,
@@ -638,6 +638,7 @@ fun FilterSheet(
                             tempSelectedExtensions = emptySet()
                             tempSelectedFileUris = emptySet()
                             fileSearchQuery = ""
+                            onApply(SearchFilter())
                         },
                         shape = RoundedCornerShape(AppDesignTokens.ButtonCornerRadius),
                         colors = ButtonDefaults.outlinedButtonColors(

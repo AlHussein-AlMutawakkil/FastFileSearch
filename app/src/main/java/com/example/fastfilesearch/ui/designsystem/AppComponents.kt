@@ -748,3 +748,33 @@ fun AppDropdownMenu(
         }
     }
 }
+
+/**
+ * 11) AppTwoLineMenuIcon:
+ * Minimalist two-line hamburger menu icon matching the reference design.
+ */
+@Composable
+fun AppTwoLineMenuIcon(
+    modifier: Modifier = Modifier,
+    tint: Color = LocalAppColors.current.textPrimary
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.End
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 19.dp, height = 2.2.dp)
+                .clip(RoundedCornerShape(1.1.dp))
+                .background(tint)
+        )
+        Spacer(modifier = Modifier.height(4.5.dp))
+        Box(
+            modifier = Modifier
+                .size(width = 13.dp, height = 2.2.dp)
+                .clip(RoundedCornerShape(1.1.dp))
+                .background(tint)
+        )
+    }
+}
