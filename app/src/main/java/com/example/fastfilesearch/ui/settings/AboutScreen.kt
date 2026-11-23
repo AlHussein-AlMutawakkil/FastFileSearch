@@ -18,10 +18,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,8 +34,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.fastfilesearch.model.SupportedFileTypeGroups
-import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.designsystem.AppDesignTokens
 import com.example.fastfilesearch.ui.designsystem.AppNavigationRow
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
@@ -45,6 +48,9 @@ fun AboutScreen(
     val context = LocalContext.current
     val colors = LocalAppColors.current
 
+    var activeDialogTitle by remember { mutableStateOf<String?>(null) }
+    var activeDialogContent by remember { mutableStateOf<String?>(null) }
+
     val versionName = remember(context) {
         try {
             val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -56,6 +62,40 @@ fun AboutScreen(
 
     BackHandler(onBack = onBack)
 
+    if (activeDialogTitle != null && activeDialogContent != null) {
+        AlertDialog(
+            onDismissRequest = {
+                activeDialogTitle = null
+                activeDialogContent = null
+            },
+            title = {
+                Text(
+                    text = activeDialogTitle!!,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = activeDialogContent!!,
+                    fontSize = 14.sp,
+                    color = colors.textSecondary,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    activeDialogTitle = null
+                    activeDialogContent = null
+                }) {
+                    Text("حسناً", color = colors.textPrimary)
+                }
+            },
+            containerColor = colors.elevatedSurface,
+            shape = RoundedCornerShape(AppDesignTokens.CardCornerRadius)
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -63,7 +103,7 @@ fun AboutScreen(
             .navigationBarsPadding()
     ) {
         AppTopBar(
-            title = "حول التطبيق",
+            title = "حول FastFileSearch",
             onBack = onBack
         )
 
@@ -74,7 +114,7 @@ fun AboutScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Top App Info Card - aligned to the right (RTL start)
+            // Top App Info Card - strictly matching reference image (Qwen style)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -83,15 +123,15 @@ fun AboutScreen(
                     .padding(20.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                // Line 1: 26.dp icon + App Name
+                // Line 1: Logo icon + App Name
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(26.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
                             .background(colors.controlActiveBackground),
                         contentAlignment = Alignment.Center
                     ) {
@@ -99,23 +139,23 @@ fun AboutScreen(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
                             tint = colors.controlActiveContent,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
                     Text(
                         text = "FastFileSearch",
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Line 2: 2-line description
                 Text(
-                    text = "محرك بحث محلي فائق السرعة وفهرسة متقدمة لمستندات أوفيس والجداول وملفات PDF والنصوص مع مطابقة عربية ذكية ودعم كامل للعمل دون اتصال بالإنترنت.",
+                    text = "FastFileSearch محرك بحث محلي فائق السرعة وفهرسة متقدمة لمستندات أوفيس والجداول وملفات PDF والنصوص مع مطابقة عربية ذكية ودعم كامل دون اتصال.",
                     fontSize = 13.sp,
                     color = colors.textSecondary,
                     lineHeight = 19.sp
@@ -123,7 +163,7 @@ fun AboutScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Line 3: App version title + version number directly below in secondary gray without background box
+                // Line 3: App version label + version number directly below in gray
                 Text(
                     text = "إصدار التطبيق",
                     fontSize = 14.sp,
@@ -138,20 +178,39 @@ fun AboutScreen(
                 )
             }
 
-            // Supported File Formats Card (clean single-line rows)
+            // Bottom Policy Card - strictly matching reference image
             AppSectionCard {
-                SupportedFileTypeGroups.ALL_GROUPS.forEach { group ->
-                    val visual = FileTypeHelper.getVisualForGroup(group)
-                    item {
-                        AppNavigationRow(
-                            title = group.displayName,
-                            value = group.extensions.joinToString("، ") { ".$it" },
-                            icon = visual.icon,
-                            iconTint = visual.color,
-                            showChevron = false,
-                            onClick = null
-                        )
-                    }
+                item {
+                    AppNavigationRow(
+                        title = "اتفاقية الخدمة",
+                        showChevron = true,
+                        onClick = {
+                            activeDialogTitle = "اتفاقية الخدمة"
+                            activeDialogContent = "تطبيق FastFileSearch هو أداة مجانية للبحث المحلي في الملفات والمستندات على جهازك دون إرسال أي بيانات إلى خوادم خارجية."
+                        }
+                    )
+                }
+
+                item {
+                    AppNavigationRow(
+                        title = "سياسة الاستخدام",
+                        showChevron = true,
+                        onClick = {
+                            activeDialogTitle = "سياسة الاستخدام"
+                            activeDialogContent = "يتم استخدام التطبيق للبحث في المستندات والملفات المصرّح بقراءتها محلياً وفق صلاحيات الوصول المختارة من قبلك."
+                        }
+                    )
+                }
+
+                item {
+                    AppNavigationRow(
+                        title = "سياسة الخصوصية",
+                        showChevron = true,
+                        onClick = {
+                            activeDialogTitle = "سياسة الخصوصية"
+                            activeDialogContent = "خصوصيتك محمية 100%. التطبيق يعمل بالكامل دون اتصال بالإنترنت (Offline)، ولا يجمع أو يشارك أي معلومات شخصية أو ملفات."
+                        }
+                    )
                 }
             }
         }

@@ -106,7 +106,7 @@ fun FilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = colors.elevatedSurface,
+        containerColor = colors.screenBackground,
         shape = RoundedCornerShape(
             topStart = AppDesignTokens.BottomSheetCornerRadius,
             topEnd = AppDesignTokens.BottomSheetCornerRadius
@@ -181,8 +181,8 @@ fun FilterSheet(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(AppDesignTokens.SubCardCornerRadius))
-                            .background(colors.subCardBackground)
+                            .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                            .background(colors.cardBackground)
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -199,25 +199,19 @@ fun FilterSheet(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) colors.cardBackground else Color.Transparent)
+                                    .background(if (isSelected) colors.subCardBackground else Color.Transparent)
                                     .clickable { tempMethod = method }
                                     .padding(horizontal = 10.dp, vertical = 9.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = method.displayName,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        fontSize = 14.sp,
-                                        color = colors.textPrimary
-                                    )
-                                    Text(
-                                        text = method.description,
-                                        fontSize = 12.sp,
-                                        color = colors.textSecondary
-                                    )
-                                }
+                                Text(
+                                    text = method.displayName,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 14.sp,
+                                    color = colors.textPrimary,
+                                    modifier = Modifier.weight(1f)
+                                )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 if (isSelected) {
                                     Box(
@@ -252,19 +246,13 @@ fun FilterSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "تجاهل التشكيل والهمزات",
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 14.sp,
-                                    color = colors.textPrimary
-                                )
-                                Text(
-                                    text = "مطابقة (أ / إ / آ / ا) والحركات كحرف واحد",
-                                    fontSize = 12.sp,
-                                    color = colors.textSecondary
-                                )
-                            }
+                            Text(
+                                text = "تجاهل التشكيل والهمزات",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp,
+                                color = colors.textPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
                             Spacer(modifier = Modifier.width(10.dp))
                             AppMonochromeSwitch(
                                 checked = tempIgnoreDiacritics,
@@ -277,8 +265,8 @@ fun FilterSheet(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(AppDesignTokens.SubCardCornerRadius))
-                            .background(colors.subCardBackground)
+                            .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                            .background(colors.cardBackground)
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -306,15 +294,6 @@ fun FilterSheet(
                             }
                         }
 
-                        Text(
-                            text = if (tempSelectedExtensions.isEmpty())
-                                "البحث في جميع أنواع الملفات المدعومة"
-                            else
-                                "تم تحديد ${tempSelectedExtensions.size} امتداد",
-                            fontSize = 12.sp,
-                            color = colors.textSecondary
-                        )
-
                         FlowRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -324,7 +303,7 @@ fun FilterSheet(
                                 val isGroupSelected = group.extensions.any { tempSelectedExtensions.contains(it) }
                                 val visual = FileTypeHelper.getVisualForGroup(group)
 
-                                val chipBg = if (isGroupSelected) colors.cardBackground else colors.elevatedSurface
+                                val chipBg = if (isGroupSelected) colors.subCardBackground else colors.screenBackground
 
                                 Row(
                                     modifier = Modifier
@@ -375,8 +354,8 @@ fun FilterSheet(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(AppDesignTokens.SubCardCornerRadius))
-                            .background(colors.subCardBackground)
+                            .clip(RoundedCornerShape(AppDesignTokens.CardCornerRadius))
+                            .background(colors.cardBackground)
                             .padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -419,7 +398,7 @@ fun FilterSheet(
                                         .fillMaxWidth()
                                         .height(40.dp)
                                         .clip(RoundedCornerShape(10.dp))
-                                        .background(colors.cardBackground)
+                                        .background(colors.subCardBackground)
                                         .padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -482,7 +461,7 @@ fun FilterSheet(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(10.dp))
-                                            .background(if (isFileSelected) colors.cardBackground else Color.Transparent)
+                                            .background(if (isFileSelected) colors.subCardBackground else Color.Transparent)
                                             .clickable {
                                                 tempSelectedFileUris = if (isFileSelected) {
                                                     tempSelectedFileUris - file.uri
@@ -558,8 +537,10 @@ fun FilterSheet(
                         },
                         shape = RoundedCornerShape(AppDesignTokens.ButtonCornerRadius),
                         colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = colors.cardBackground,
                             contentColor = colors.textPrimary
                         ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.divider),
                         modifier = Modifier
                             .weight(0.38f)
                             .height(50.dp)

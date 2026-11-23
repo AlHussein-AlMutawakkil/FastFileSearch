@@ -11,11 +11,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
+import androidx.compose.material.icons.automirrored.filled.WrapText
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,11 +36,12 @@ fun SettingsScreen(
     onSelectFolderClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onToggleStretchSingleColumn: (Boolean) -> Unit,
-    onToggleShowAllRows: (Boolean) -> Unit = {},
-    onToggleVerticalCopyFormat: (Boolean) -> Unit = {},
-    onToggleExpandFullCellText: (Boolean) -> Unit = {},
+    onToggleShowAllRows: (Boolean) -> Unit,
+    onToggleVerticalCopyFormat: (Boolean) -> Unit,
+    onToggleExpandFullCellText: (Boolean) -> Unit,
     onNavigateToTheme: () -> Unit,
     onNavigateToPermissions: () -> Unit,
+    onNavigateToSupportedFormats: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -58,7 +63,6 @@ fun SettingsScreen(
     }
 
     val statsText = "${uiState.filesCount} ملف، ${uiState.segmentsCount} مقطع"
-    val permissionStatusText = if (uiState.folderUri != null) "ممنوح" else "مطلوب"
 
     Column(
         modifier = modifier
@@ -101,7 +105,50 @@ fun SettingsScreen(
                 }
             }
 
-            // CARD 2: المظهر وتمديد العمود الواحد
+            // CARD 2: إعدادات الجداول الأربعة مع الشروحات
+            AppSectionCard {
+                item {
+                    AppToggleRow(
+                        title = "تمديد العمود الواحد في الجداول",
+                        subtitle = "ملء عرض الشاشة بالكامل عند وجود عمود واحد",
+                        checked = uiState.stretchSingleColumn,
+                        onCheckedChange = onToggleStretchSingleColumn,
+                        icon = Icons.AutoMirrored.Filled.FormatAlignRight
+                    )
+                }
+
+                item {
+                    AppToggleRow(
+                        title = "عرض جميع الصفوف مباشرة",
+                        subtitle = "إظهار كامل صفوف الجدول دون الحاجة لزر عرض المزيد",
+                        checked = uiState.showAllRows,
+                        onCheckedChange = onToggleShowAllRows,
+                        icon = Icons.Default.TableRows
+                    )
+                }
+
+                item {
+                    AppToggleRow(
+                        title = "نسخ عمودي بأسماء الأعمدة",
+                        subtitle = "نسخ الصفوف بتنسيق رأسي (اسم العمود: القيمة)",
+                        checked = uiState.verticalCopyFormat,
+                        onCheckedChange = onToggleVerticalCopyFormat,
+                        icon = Icons.Default.ContentCopy
+                    )
+                }
+
+                item {
+                    AppToggleRow(
+                        title = "توسيع نص الخلية بالكامل",
+                        subtitle = "عرض النص كاملاً داخل الخلية دون اقتصاره على أربعة أسطر",
+                        checked = uiState.expandFullCellText,
+                        onCheckedChange = onToggleExpandFullCellText,
+                        icon = Icons.AutoMirrored.Filled.WrapText
+                    )
+                }
+            }
+
+            // CARD 3: المجموعة الأخيرة: المظهر، الأذونات، الصيغ المدعومة، حول التطبيق
             AppSectionCard {
                 item {
                     AppNavigationRow(
@@ -114,21 +161,8 @@ fun SettingsScreen(
                 }
 
                 item {
-                    AppToggleRow(
-                        title = "تمديد العمود الواحد",
-                        checked = uiState.stretchSingleColumn,
-                        onCheckedChange = onToggleStretchSingleColumn,
-                        icon = Icons.AutoMirrored.Filled.FormatAlignRight
-                    )
-                }
-            }
-
-            // CARD 3: الأذونات وحول التطبيق
-            AppSectionCard {
-                item {
                     AppNavigationRow(
                         title = "الأذونات",
-                        value = permissionStatusText,
                         icon = Icons.Default.Security,
                         showChevron = false,
                         onClick = onNavigateToPermissions
@@ -137,9 +171,18 @@ fun SettingsScreen(
 
                 item {
                     AppNavigationRow(
+                        title = "الصيغ المدعومة",
+                        icon = Icons.Default.Description,
+                        showChevron = false,
+                        onClick = onNavigateToSupportedFormats
+                    )
+                }
+
+                item {
+                    AppNavigationRow(
                         title = "حول التطبيق",
                         icon = Icons.Default.Info,
-                        showChevron = true,
+                        showChevron = false,
                         onClick = onNavigateToAbout
                     )
                 }

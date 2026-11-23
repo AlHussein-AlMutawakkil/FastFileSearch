@@ -211,11 +211,12 @@ fun OfficialExcelTableCard(
             .fillMaxWidth()
             .background(colors.tableBg)
     ) {
-        // 1. Top Bar: Calm file-specific tint, icon, file name, matches count, and Open File button
+        // 1. Top Bar: Calm file-specific tint, icon, file name, and matches count (numbers only in place of open button)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(topBarBg)
+                .clickable(onClick = onOpenFile)
                 .padding(horizontal = 14.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -238,33 +239,19 @@ fun OfficialExcelTableCard(
                 modifier = Modifier.weight(1f)
             )
 
-            // Matches Count Badge
+            // Matches Count Badge (numbers only, in place of open button)
             Box(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
-                    .padding(horizontal = 9.dp, vertical = 3.dp),
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "${group.results.size} مطابقة",
+                    text = "${group.results.size}",
                     color = if (isDark) Color(0xFFE4E7EB) else visual.color,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            IconButton(
-                onClick = onOpenFile,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                    contentDescription = "فتح الملف",
-                    tint = visual.color,
-                    modifier = Modifier.size(20.dp)
                 )
             }
         }

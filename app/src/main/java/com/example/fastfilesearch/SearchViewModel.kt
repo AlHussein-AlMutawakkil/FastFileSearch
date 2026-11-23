@@ -96,7 +96,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
         // Auto delta-sync on startup if a folder is already configured
         if (savedUri != null) {
-            syncFolder(savedUri)
+            syncFolder(savedUri, isStartup = true)
         }
     }
 
@@ -174,7 +174,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private fun syncFolder(uri: Uri) {
+    private fun syncFolder(uri: Uri, isStartup: Boolean = false) {
         if (_uiState.value.indexProgress.isIndexing) return
 
         viewModelScope.launch {
@@ -185,11 +185,13 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
                 val stats = searchEngine.getIndexStats()
                 val allFiles = searchEngine.getAllIndexedFiles()
-                val message = when {
+                val message: String? = when {
                     summary.indexedCount > 0 ->
                         "اكتملت الفهرسة: تم تحديث ${summary.indexedCount} ملف، وتخطي ${summary.skippedCount} ملف دون تغيير."
                     summary.deletedCount > 0 ->
                         "تم حذف ${summary.deletedCount} ملف غير موجود."
+                    isStartup ->
+                        null
                     else ->
                         "جميع الملفات محدثة (${summary.skippedCount} ملف)."
                 }

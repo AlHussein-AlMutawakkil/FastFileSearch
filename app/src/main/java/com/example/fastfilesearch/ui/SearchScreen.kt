@@ -84,6 +84,7 @@ import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
 import com.example.fastfilesearch.ui.settings.AboutScreen
 import com.example.fastfilesearch.ui.settings.PermissionsScreen
 import com.example.fastfilesearch.ui.settings.SettingsScreen
+import com.example.fastfilesearch.ui.settings.SupportedFormatsScreen
 import com.example.fastfilesearch.ui.settings.ThemeSettingsScreen
 import kotlinx.coroutines.launch
 
@@ -92,6 +93,7 @@ enum class AppDestination {
     SETTINGS,
     THEME_SETTINGS,
     PERMISSIONS,
+    SUPPORTED_FORMATS,
     ABOUT
 }
 
@@ -164,6 +166,7 @@ fun SearchScreen(
                         onToggleExpandFullCellText = onToggleExpandFullCellText,
                         onNavigateToTheme = { currentDestination = AppDestination.THEME_SETTINGS },
                         onNavigateToPermissions = { currentDestination = AppDestination.PERMISSIONS },
+                        onNavigateToSupportedFormats = { currentDestination = AppDestination.SUPPORTED_FORMATS },
                         onNavigateToAbout = { currentDestination = AppDestination.ABOUT },
                         onBack = { currentDestination = AppDestination.SEARCH }
                     )
@@ -183,6 +186,13 @@ fun SearchScreen(
                     PermissionsScreen(
                         folderUri = uiState.folderUri,
                         onSelectFolderClick = onSelectFolderClick,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.SUPPORTED_FORMATS -> {
+                    SupportedFormatsScreen(
                         onBack = { currentDestination = AppDestination.SETTINGS }
                     )
                     return@CompositionLocalProvider
@@ -467,6 +477,15 @@ fun SearchScreen(
                     }
 
                     else -> {
+                        val fileCount = groupedResults.size
+                        val fileWord = when {
+                            fileCount == 1 -> "ملف واحد"
+                            fileCount == 2 -> "ملفين"
+                            fileCount in 3..10 -> "$fileCount ملفات"
+                            else -> "$fileCount ملفاً"
+                        }
+                        val resultCount = uiState.searchResults.size
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -475,10 +494,10 @@ fun SearchScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "تم العثور على ${uiState.searchResults.size} نتيجة في ${groupedResults.size} ملف",
+                                text = "تم العثور على $resultCount نتيجة في $fileWord",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
+                                color = colors.textSecondary,
+                                fontWeight = FontWeight.Medium
                             )
                         }
 

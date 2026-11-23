@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -134,32 +135,29 @@ fun WordPdfGroupedCard(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = group.fileName,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = headerTextColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${group.results.size} مطابقة في هذا المستند",
-                        fontSize = 12.sp,
-                        color = visual.color,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                Text(
+                    text = group.fileName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = headerTextColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
 
-                IconButton(
-                    onClick = onOpenFile,
-                    modifier = Modifier.size(36.dp)
+                // Matches Count Badge (numbers only, in place of open button)
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "فتح الملف",
-                        tint = visual.color,
-                        modifier = Modifier.size(20.dp)
+                    Text(
+                        text = "${group.results.size}",
+                        color = if (isDark) Color(0xFFE4E7EB) else visual.color,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
