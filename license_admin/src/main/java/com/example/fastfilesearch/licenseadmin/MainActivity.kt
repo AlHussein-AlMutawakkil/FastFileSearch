@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import com.example.fastfilesearch.licenseadmin.security.AdminLockManager
+import com.example.fastfilesearch.licenseadmin.sync.LicenseLogSyncManager
 import com.example.fastfilesearch.licenseadmin.ui.components.AppPrimaryButton
 import com.example.fastfilesearch.licenseadmin.ui.screens.AdminSettingsScreen
 import com.example.fastfilesearch.licenseadmin.ui.screens.GeneratorScreen
@@ -52,6 +53,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        LicenseLogSyncManager.scheduleIfPending(this)
 
         setContent {
             val isDark = isSystemInDarkTheme()

@@ -53,7 +53,7 @@ object DeviceInfoHelper {
     }
 
     /**
-     * Builds a compact JSON payload of device and installation details
+     * Builds a compact JSON payload of device, fingerprint, and installation details
      * and encodes it with Base64 URL_SAFE (without padding) prefixed with "BAR1."
      */
     fun buildEncodedActivationRequest(context: Context, installationId: String): String {
@@ -62,11 +62,43 @@ object DeviceInfoHelper {
         val os = getOsVersion()
         val abi = getCpuAbi()
         val v = getAppVersion(context)
+        val clientDeviceId = ClientDeviceIdProvider.getClientDeviceId(context)
 
+        return encodeActivationRequest(
+            installationId = installationId,
+            manufacturer = m,
+            model = d,
+            osVersion = os,
+            abi = abi,
+            appVersion = v,
+            clientDeviceId = clientDeviceId
+        )
+    }
+
+    internal fun encodeActivationRequest(
+        installationId: String,
+        manufacturer: String,
+        model: String,
+        osVersion: String,
+        abi: String,
+        appVersion: String,
+        clientDeviceId: String?
+    ): String {
         fun escapeJson(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
 
-        val json = """{"id":"${escapeJson(installationId)}","m":"${escapeJson(m)}","d":"${escapeJson(d)}","os":"${escapeJson(os)}","abi":"${escapeJson(abi)}","v":"${escapeJson(v)}"}"""
-        val encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(StandardCharsets.UTF_8))
+        val sb = StringBuilder("{")
+        sb.append("\"id\":\"").append(escapeJson(installationId)).append("\",")
+        sb.append("\"m\":\"").append(escapeJson(manufacturer)).append("\",")
+        sb.append("\"d\":\"").append(escapeJson(model)).append("\",")
+        sb.append("\"os\":\"").append(escapeJson(osVersion)).append("\",")
+        sb.append("\"abi\":\"").append(escapeJson(abi)).append("\",")
+        sb.append("\"v\":\"").append(escapeJson(appVersion)).append("\"")
+        if (!clientDeviceId.isNullOrBlank()) {
+            sb.append(",\"client_device_id\":\"").append(escapeJson(clientDeviceId)).append("\"")
+        }
+        sb.append("}")
+        val encoded = Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(sb.toString().toByteArray(StandardCharsets.UTF_8))
         return "BAR1.$encoded"
     }
 

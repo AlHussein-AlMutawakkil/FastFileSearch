@@ -27,7 +27,8 @@ data class ClientDeviceInfo(
     val model: String = "",
     val osVersion: String = "",
     val abi: String = "",
-    val appVersion: String = ""
+    val appVersion: String = "",
+    val clientDeviceId: String? = null
 ) {
     val isAvailable: Boolean
         get() = manufacturer.isNotBlank() || model.isNotBlank() || osVersion.isNotBlank() || abi.isNotBlank() || appVersion.isNotBlank()
@@ -35,7 +36,8 @@ data class ClientDeviceInfo(
 
 data class ParsedActivationRequest(
     val installationId: String,
-    val deviceInfo: ClientDeviceInfo? = null
+    val deviceInfo: ClientDeviceInfo? = null,
+    val clientDeviceId: String? = null
 )
 
 object AdminLicenseGenerator {
@@ -70,6 +72,7 @@ object AdminLicenseGenerator {
                 val os = extractField("os")
                 val abi = extractField("abi")
                 val v = extractField("v")
+                val clientDeviceId = extractField("client_device_id").trim().takeIf { it.isNotBlank() }
 
                 val cleanId = if (id.isNotBlank()) cleanInstallationId(id) else ""
                 val devInfo = ClientDeviceInfo(
@@ -77,13 +80,15 @@ object AdminLicenseGenerator {
                     model = d,
                     osVersion = os,
                     abi = abi,
-                    appVersion = v
+                    appVersion = v,
+                    clientDeviceId = clientDeviceId
                 )
 
                 if (cleanId.isNotBlank()) {
                     return ParsedActivationRequest(
                         installationId = cleanId,
-                        deviceInfo = if (devInfo.isAvailable) devInfo else null
+                        deviceInfo = if (devInfo.isAvailable) devInfo else null,
+                        clientDeviceId = clientDeviceId
                     )
                 }
             } catch (_: Exception) {}

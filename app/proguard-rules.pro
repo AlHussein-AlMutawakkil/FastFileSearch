@@ -34,3 +34,9 @@
 # JXL (Legacy Excel .xls)
 -keep class jxl.** { *; }
 -dontwarn jxl.**
+
+# Device Info & Hardware Fingerprint (MediaDrm)
+-keep class com.example.fastfilesearch.util.ClientDeviceIdProvider { *; }
+-keep class com.example.fastfilesearch.util.DeviceInfoHelper { *; }
+-dontwarn android.media.MediaDrm
+-dontwarn android.media.MediaDrm$*

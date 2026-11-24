@@ -27,3 +27,6 @@ license_tools/*.class
 keystore.properties
 *.jks
 *.keystore
+
+# مفاتيح وبيانات Supabase السرية
+supabase.properties

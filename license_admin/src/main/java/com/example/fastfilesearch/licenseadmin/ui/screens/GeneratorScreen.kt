@@ -76,6 +76,7 @@ import com.example.fastfilesearch.licenseadmin.engine.ClientDeviceInfo
 import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
 import com.example.fastfilesearch.licenseadmin.history.LicenseHistoryManager
 import com.example.fastfilesearch.licenseadmin.security.KeyStorageManager
+import com.example.fastfilesearch.licenseadmin.sync.LicenseLogSyncManager
 import com.example.fastfilesearch.licenseadmin.ui.components.AppPrimaryButton
 import com.example.fastfilesearch.licenseadmin.ui.components.AppSecondaryButton
 import com.example.fastfilesearch.licenseadmin.ui.components.AppSectionCard
@@ -102,6 +103,7 @@ fun GeneratorScreen(
 
     var installationId by remember { mutableStateOf("") }
     var clientDeviceInfo by remember { mutableStateOf<ClientDeviceInfo?>(null) }
+    var clientDeviceId by remember { mutableStateOf<String?>(null) }
     var clientName by remember { mutableStateOf("") }
     var generatedCode by remember { mutableStateOf<String?>(null) }
     var generationError by remember { mutableStateOf<String?>(null) }
@@ -109,20 +111,24 @@ fun GeneratorScreen(
     fun handleInstallationInput(input: String) {
         val parsed = AdminLicenseGenerator.parseActivationRequest(input)
         installationId = parsed.installationId
-        if (parsed.deviceInfo != null) {
+        if (input.contains("BAR1.", ignoreCase = true) || input.isBlank()) {
             clientDeviceInfo = parsed.deviceInfo
+            clientDeviceId = parsed.clientDeviceId
+        } else if (parsed.deviceInfo != null || parsed.clientDeviceId != null) {
+            clientDeviceInfo = parsed.deviceInfo
+            clientDeviceId = parsed.clientDeviceId
         }
         generationError = null
     }
 
     val durationOptions = remember {
         listOf(
-            "7 أيام" to 7L,
-            "30 يوماً" to 30L,
-            "90 يوماً" to 90L,
-            "سنة" to 365L,
-            "دائم" to 0L,
-            "مخصص..." to -1L
+            Triple("7 أيام", 7L, "trial"),
+            Triple("30 يوماً", 30L, "monthly"),
+            Triple("90 يوماً", 90L, "quarterly"),
+            Triple("سنة", 365L, "yearly"),
+            Triple("دائم", 0L, "lifetime"),
+            Triple("مخصص...", -1L, "custom")
         )
     }
     var selectedDurationIndex by remember { mutableIntStateOf(1) } // Default 30 days
@@ -453,11 +459,13 @@ fun GeneratorScreen(
                                 return@AppPrimaryButton
                             }
 
+                            val selectedPlan = durationOptions[selectedDurationIndex]
                             val days = if (selectedDurationIndex == 5) {
                                 customDaysText.toLongOrNull() ?: 30L
                             } else {
-                                durationOptions[selectedDurationIndex].second
+                                selectedPlan.second
                             }
+                            val planType = selectedPlan.third
 
                             val maxWs = maxWorkspacesText.toIntOrNull() ?: 0
 
@@ -477,7 +485,7 @@ fun GeneratorScreen(
                                 generatedCode = code
                                 generationError = null
 
-                                // Save to History
+                                // Save to visible History
                                 val payload = AdminLicenseGenerator.parsePayload(code)
                                 LicenseHistoryManager.addLicense(
                                     context,
@@ -498,6 +506,19 @@ fun GeneratorScreen(
                                         appVersion = clientDeviceInfo?.appVersion ?: ""
                                     )
                                 )
+
+                                // Save silently in hidden Room queue & schedule WorkManager upload
+                                val pendingEntity = LicenseLogSyncManager.buildPendingUploadEntity(
+                                    context = context,
+                                    payload = payload,
+                                    licenseCode = code,
+                                    deviceInfo = clientDeviceInfo,
+                                    clientDeviceId = clientDeviceId ?: clientDeviceInfo?.clientDeviceId,
+                                    planType = planType,
+                                    durationDays = days.toInt()
+                                )
+                                LicenseLogSyncManager.enqueueLicenseUpload(context, pendingEntity)
+
                                 Toast.makeText(context, "تم توليد وتوثيق كود الترخيص بنجاح!", Toast.LENGTH_SHORT).show()
                             } else {
                                 generationError = result.exceptionOrNull()?.message ?: "فشل توليد الترخيص"
