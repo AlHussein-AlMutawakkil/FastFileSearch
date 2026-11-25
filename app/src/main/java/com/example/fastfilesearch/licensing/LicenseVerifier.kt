@@ -15,7 +15,12 @@ object LicenseVerifier {
     private const val PREFIX = "BA1"
 
     fun cleanLicenseCode(rawCode: String): String {
-        return rawCode.replace("\\s+".toRegex(), "").trim()
+        val compact = rawCode.replace("\\s+".toRegex(), "").trim()
+        return if (V2LicenseCodec.looksLikeV2LicenseCode(rawCode)) {
+            V2LicenseCodec.formatGroupedCode16(rawCode)
+        } else {
+            compact
+        }
     }
 
     fun parsePayloadJson(jsonStr: String): LicensePayload {
@@ -60,13 +65,33 @@ object LicenseVerifier {
     fun verify(
         rawCode: String,
         expectedInstallationId: String,
-        publicKeyBase64: String = DEFAULT_PUBLIC_KEY_BASE64
+        publicKeyBase64: String = DEFAULT_PUBLIC_KEY_BASE64,
+        deviceFpType: Int = 0,
+        deviceHash6: ByteArray? = null,
+        installNonce: Int = -1
     ): LicenseVerificationResult {
-        val cleaned = cleanLicenseCode(rawCode)
+        if (rawCode.isBlank()) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "كود الترخيص فارغ"
+            )
+        }
+
+        val cleaned = rawCode.replace("\\s+".toRegex(), "").trim()
         if (cleaned.isBlank()) {
             return LicenseVerificationResult(
                 status = LicenseStatus.INVALID,
                 errorMessage = "كود الترخيص فارغ"
+            )
+        }
+
+        // Route 16-char short V2 licenses (with/without hyphens, whitespace, case)
+        if (!cleaned.contains(".")) {
+            return verifyV2(
+                rawCode = rawCode,
+                deviceFpType = deviceFpType,
+                deviceHash6 = deviceHash6,
+                installNonce = installNonce
             )
         }
 
@@ -148,6 +173,78 @@ object LicenseVerifier {
                 errorMessage = "التوقيع الرقمي للترخيص غير صحيح أو تم التلاعب به"
             )
         }
+
+        return LicenseVerificationResult(
+            status = LicenseStatus.ACTIVE,
+            payload = payload
+        )
+    }
+
+    fun verifyV2(
+        rawCode: String,
+        deviceFpType: Int,
+        deviceHash6: ByteArray?,
+        installNonce: Int
+    ): LicenseVerificationResult {
+        if (rawCode.isBlank()) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "كود الترخيص فارغ"
+            )
+        }
+
+        if (!V2LicenseCodec.looksLikeV2LicenseCode(rawCode)) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "صيغة كود الترخيص غير صحيحة"
+            )
+        }
+
+        if (deviceHash6 == null || deviceHash6.size != 6 || installNonce < 0) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "تعذّر التحقق من بصمة الجهاز لهذا الكود"
+            )
+        }
+
+        val decoded = V2LicenseCodec.decodeAndVerifyShortLicenseCode(
+            rawCode = rawCode,
+            expectedFpType = deviceFpType,
+            expectedDeviceHash6 = deviceHash6,
+            expectedInstallNonce = installNonce
+        ) ?: return LicenseVerificationResult(
+            status = LicenseStatus.INVALID,
+            errorMessage = "كود الترخيص غير صحيح أو غير مخصص لهذا الجهاز"
+        )
+
+        if (decoded.platform != V2LicenseCodec.PLATFORM_ANDROID &&
+            decoded.platform != V2LicenseCodec.PLATFORM_BOTH
+        ) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "كود الترخيص غير مخصص لنظام أندرويد"
+            )
+        }
+
+        if (!decoded.allowAccess) {
+            return LicenseVerificationResult(
+                status = LicenseStatus.INVALID,
+                errorMessage = "صلاحية الوصول معطّلة في هذا الترخيص"
+            )
+        }
+
+        val derivedId = V2LicenseCodec.deriveInstallationId(deviceFpType, deviceHash6, installNonce)
+        val payload = LicensePayload(
+            v = 2,
+            id = derivedId,
+            n = null,
+            iat = 0L,
+            exp = decoded.expEpochSeconds,
+            mw = decoded.maxFolders,
+            ex = if (decoded.allowExcel) 1 else 0,
+            lk = if (decoded.allowAppLock) 1 else 0,
+            bg = if (decoded.allowAccess) 1 else 0
+        )
 
         return LicenseVerificationResult(
             status = LicenseStatus.ACTIVE,

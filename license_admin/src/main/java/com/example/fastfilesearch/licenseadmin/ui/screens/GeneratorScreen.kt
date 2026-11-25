@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.licenseadmin.R
 import com.example.fastfilesearch.licenseadmin.engine.AdminLicenseGenerator
 import com.example.fastfilesearch.licenseadmin.engine.ClientDeviceInfo
+import com.example.fastfilesearch.licenseadmin.engine.ParsedActivationRequest
+import com.example.fastfilesearch.licenseadmin.engine.V2LicenseCodec
 import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
 import com.example.fastfilesearch.licenseadmin.history.LicenseHistoryManager
 import com.example.fastfilesearch.licenseadmin.history.LicenseRenewalDraft
@@ -106,6 +108,7 @@ fun GeneratorScreen(
     var pastedKeyText by remember { mutableStateOf("") }
 
     var installationId by remember { mutableStateOf("") }
+    var parsedR2Request by remember { mutableStateOf<ParsedActivationRequest?>(null) }
     var clientDeviceInfo by remember { mutableStateOf<ClientDeviceInfo?>(null) }
     var clientDeviceId by remember { mutableStateOf<String?>(null) }
     var clientName by remember { mutableStateOf("") }
@@ -115,12 +118,22 @@ fun GeneratorScreen(
     fun handleInstallationInput(input: String) {
         val parsed = AdminLicenseGenerator.parseActivationRequest(input)
         installationId = parsed.installationId
-        if (input.contains("BAR1.", ignoreCase = true) || input.isBlank()) {
+        if (parsed.isR2Request) {
+            parsedR2Request = parsed
+            clientDeviceInfo = parsed.deviceInfo
+            clientDeviceId = parsed.clientDeviceId
+        } else if (input.contains("BAR1.", ignoreCase = true) || input.isBlank()) {
+            parsedR2Request = null
             clientDeviceInfo = parsed.deviceInfo
             clientDeviceId = parsed.clientDeviceId
         } else if (parsed.deviceInfo != null || parsed.clientDeviceId != null) {
+            parsedR2Request = null
             clientDeviceInfo = parsed.deviceInfo
             clientDeviceId = parsed.clientDeviceId
+        } else {
+            if (parsed.installationId != parsedR2Request?.installationId) {
+                parsedR2Request = null
+            }
         }
         generationError = null
     }
@@ -163,6 +176,29 @@ fun GeneratorScreen(
                 abi = item.abi,
                 appVersion = item.appVersion,
                 clientDeviceId = savedCdid
+            )
+        } else {
+            null
+        }
+        val hexStr = item.r2DeviceHash6Hex
+        val restoredHash6 = if (hexStr != null && hexStr.length == 12) {
+            try {
+                ByteArray(6) { i -> hexStr.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
+        parsedR2Request = if (item.r2FpType != null && restoredHash6 != null && item.r2InstallNonce != null) {
+            ParsedActivationRequest(
+                installationId = item.installationId,
+                deviceInfo = clientDeviceInfo,
+                clientDeviceId = savedCdid,
+                platformCode = item.platformCode ?: V2LicenseCodec.PLATFORM_ANDROID,
+                fpType = item.r2FpType,
+                deviceHash6 = restoredHash6,
+                installNonce = item.r2InstallNonce
             )
         } else {
             null
@@ -316,14 +352,14 @@ fun GeneratorScreen(
                         }
                     )
                 } else {
-                    // 1. Installation ID Field
+                    // 1. Unified Request / Installation ID Field
                     AppTextField(
                         value = installationId,
                         onValueChange = {
                             handleInstallationInput(it)
                         },
-                        label = "معرّف التثبيت (Installation ID) *",
-                        placeholder = "مثال: BA-A2B3-C4D5-E6F7 أو كود الطلب BAR1...",
+                        label = "كود طلب التفعيل / معرّف الجهاز *",
+                        placeholder = "مثال: كود R2... أو BAR1... أو BA-A2B3-C4D5-E6F7",
                         isMonospace = true,
                         trailingIcon = {
                             IconButton(
@@ -499,15 +535,10 @@ fun GeneratorScreen(
                         text = "توليد كود الترخيص",
                         icon = Icons.Outlined.Key,
                         onClick = {
+                            val activeR2 = parsedR2Request
                             val cleanId = AdminLicenseGenerator.cleanInstallationId(installationId)
-                            if (cleanId.isBlank()) {
+                            if (cleanId.isBlank() && activeR2 == null) {
                                 generationError = "يرجى إدخال معرّف التثبيت."
-                                return@AppPrimaryButton
-                            }
-
-                            val privKey = KeyStorageManager.getPrivateKey(context)
-                            if (privKey == null) {
-                                generationError = "تعذر قراءة المفتاح الخاص مشفّراً."
                                 return@AppPrimaryButton
                             }
 
@@ -518,19 +549,39 @@ fun GeneratorScreen(
                                 selectedPlan.second
                             }
                             val planType = selectedPlan.third
-
                             val maxWs = maxWorkspacesText.toIntOrNull() ?: 0
+                            val nowSeconds = System.currentTimeMillis() / 1000L
 
-                            val result = AdminLicenseGenerator.generateLicense(
-                                privateKey = privKey,
-                                installationId = cleanId,
-                                clientName = clientName.takeIf { it.isNotBlank() },
-                                durationDays = days,
-                                maxWorkspaces = maxWs,
-                                excelExport = excelExport,
-                                appLock = appLock,
-                                bgSync = bgSync
-                            )
+                            val result: Result<String>
+                            if (activeR2 != null && activeR2.isR2Request) {
+                                result = AdminLicenseGenerator.generateV2License(
+                                    parsedRequest = activeR2,
+                                    durationDays = days,
+                                    maxWorkspaces = maxWs,
+                                    excelExport = excelExport,
+                                    appLock = appLock,
+                                    allowAccess = bgSync,
+                                    platform = activeR2.platformCode ?: V2LicenseCodec.PLATFORM_ANDROID,
+                                    planType = planType,
+                                    nowSeconds = nowSeconds
+                                )
+                            } else {
+                                val privKey = KeyStorageManager.getPrivateKey(context)
+                                if (privKey == null) {
+                                    generationError = "تعذر قراءة المفتاح الخاص مشفّراً."
+                                    return@AppPrimaryButton
+                                }
+                                result = AdminLicenseGenerator.generateLicense(
+                                    privateKey = privKey,
+                                    installationId = cleanId,
+                                    clientName = clientName.takeIf { it.isNotBlank() },
+                                    durationDays = days,
+                                    maxWorkspaces = maxWs,
+                                    excelExport = excelExport,
+                                    appLock = appLock,
+                                    bgSync = bgSync
+                                )
+                            }
 
                             if (result.isSuccess) {
                                 val code = result.getOrThrow()
@@ -538,7 +589,14 @@ fun GeneratorScreen(
                                 generationError = null
 
                                 // Save to visible History
-                                val payload = AdminLicenseGenerator.parsePayload(code)
+                                val effectiveId = activeR2?.installationId ?: cleanId
+                                val trimmedClientName = clientName.trim().takeIf { it.isNotBlank() }
+                                val payload = AdminLicenseGenerator.parsePayload(
+                                    licenseCode = code,
+                                    installationId = effectiveId,
+                                    clientName = trimmedClientName,
+                                    issuedAt = nowSeconds
+                                )
                                 LicenseHistoryManager.addLicense(
                                     context,
                                     IssuedLicenseItem(
@@ -556,7 +614,11 @@ fun GeneratorScreen(
                                         osVersion = clientDeviceInfo?.osVersion ?: "",
                                         abi = clientDeviceInfo?.abi ?: "",
                                         appVersion = clientDeviceInfo?.appVersion ?: "",
-                                        clientDeviceId = (clientDeviceId ?: clientDeviceInfo?.clientDeviceId).orEmpty()
+                                        clientDeviceId = (clientDeviceId ?: clientDeviceInfo?.clientDeviceId).orEmpty(),
+                                        r2FpType = activeR2?.fpType,
+                                        r2DeviceHash6Hex = activeR2?.deviceHash6?.let { V2LicenseCodec.bytesToHexLower(it) },
+                                        r2InstallNonce = activeR2?.installNonce,
+                                        platformCode = activeR2?.platformCode
                                     )
                                 )
 

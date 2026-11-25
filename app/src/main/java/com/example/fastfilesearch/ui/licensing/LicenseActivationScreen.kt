@@ -1,7 +1,6 @@
 package com.example.fastfilesearch.ui.licensing
 
 import android.app.Activity
-import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -26,9 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,7 +45,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,7 +81,9 @@ fun LicenseActivationScreen(
         val colors = LocalAppColors.current
 
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            val installationId = remember { licenseManager.installationId }
+            val deviceRequestCode = remember {
+                DeviceInfoHelper.buildR2ActivationRequest(context)
+            }
             val currentStatus = remember { licenseManager.getLicenseStatus() }
 
             var licenseInput by remember { mutableStateOf("") }
@@ -136,7 +134,7 @@ fun LicenseActivationScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Card displaying Installation ID with Copy and Share icons
+                // Card displaying unified R2 Device / Activation Request Code with Copy and Share icons
                 AppSectionCard {
                     item {
                         Column(
@@ -145,68 +143,18 @@ fun LicenseActivationScreen(
                                 .padding(16.dp)
                         ) {
                             Text(
-                                text = "معرّف التثبيت الخاص بجهازك",
+                                text = "كود طلب التفعيل (معرّف الجهاز)",
                                 fontSize = 13.sp,
                                 color = colors.textSecondary
                             )
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = installationId,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp,
-                                    color = colors.textPrimary
-                                )
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    IconButton(
-                                        onClick = {
-                                            val requestCode = DeviceInfoHelper.buildEncodedActivationRequest(context, installationId)
-                                            clipboardManager.setText(AnnotatedString(requestCode))
-                                            Toast.makeText(context, "تم نسخ كود طلب التفعيل", Toast.LENGTH_SHORT).show()
-                                        },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.ContentCopy,
-                                            contentDescription = "نسخ كود الطلب",
-                                            tint = colors.textSecondary,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    }
-
-                                    IconButton(
-                                        onClick = {
-                                            try {
-                                                val message = DeviceInfoHelper.buildActivationRequestMessage(context, installationId)
-                                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                                    type = "text/plain"
-                                                    putExtra(Intent.EXTRA_TEXT, message)
-                                                }
-                                                context.startActivity(Intent.createChooser(intent, "مشاركة طلب التفعيل"))
-                                            } catch (_: Exception) {}
-                                        },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Share,
-                                            contentDescription = "مشاركة طلب التفعيل",
-                                            tint = colors.textSecondary,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    }
-                                }
-                            }
+                            DeviceRequestCodeBlock(
+                                code = deviceRequestCode,
+                                copyToastMessage = "تم نسخ كود طلب التفعيل",
+                                shareChooserTitle = "مشاركة كود طلب التفعيل"
+                            )
                         }
                     }
                 }

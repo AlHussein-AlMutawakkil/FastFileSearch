@@ -28,7 +28,8 @@ data class ClientDeviceInfo(
     val osVersion: String = "",
     val abi: String = "",
     val appVersion: String = "",
-    val clientDeviceId: String? = null
+    val clientDeviceId: String? = null,
+    val platform: String = ""
 ) {
     val isAvailable: Boolean
         get() = manufacturer.isNotBlank() || model.isNotBlank() || osVersion.isNotBlank() || abi.isNotBlank() || appVersion.isNotBlank()
@@ -37,8 +38,38 @@ data class ClientDeviceInfo(
 data class ParsedActivationRequest(
     val installationId: String,
     val deviceInfo: ClientDeviceInfo? = null,
-    val clientDeviceId: String? = null
-)
+    val clientDeviceId: String? = null,
+    val platformCode: Int? = null,
+    val fpType: Int? = null,
+    val deviceHash6: ByteArray? = null,
+    val installNonce: Int? = null
+) {
+    val isR2Request: Boolean
+        get() = deviceHash6 != null && deviceHash6.size == 6 && fpType != null && installNonce != null
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ParsedActivationRequest) return false
+        return installationId == other.installationId &&
+            deviceInfo == other.deviceInfo &&
+            clientDeviceId == other.clientDeviceId &&
+            platformCode == other.platformCode &&
+            fpType == other.fpType &&
+            (deviceHash6?.contentEquals(other.deviceHash6) ?: (other.deviceHash6 == null)) &&
+            installNonce == other.installNonce
+    }
+
+    override fun hashCode(): Int {
+        var result = installationId.hashCode()
+        result = 31 * result + (deviceInfo?.hashCode() ?: 0)
+        result = 31 * result + (clientDeviceId?.hashCode() ?: 0)
+        result = 31 * result + (platformCode ?: 0)
+        result = 31 * result + (fpType ?: 0)
+        result = 31 * result + (deviceHash6?.contentHashCode() ?: 0)
+        result = 31 * result + (installNonce ?: 0)
+        return result
+    }
+}
 
 object AdminLicenseGenerator {
 
@@ -48,11 +79,35 @@ object AdminLicenseGenerator {
 
     /**
      * Parses activation request input.
-     * 1) First checks for BAR1.<base64> pattern, decodes Base64Url, and extracts installationId + ClientDeviceInfo.
-     * 2) If not found, falls back to BA-XXXX-XXXX-XXXX pattern (backward compatibility).
-     * 3) If neither matches, returns trimmed input with null device info.
+     * 1) Checks for compressed V2 R2<Base62> request first.
+     * 2) Falls back to BAR1.<base64> pattern.
+     * 3) Falls back to plain BA-XXXX-XXXX-XXXX pattern (backward compatibility).
+     * 4) If none match, returns trimmed input with null device info.
      */
     fun parseActivationRequest(rawInput: String): ParsedActivationRequest {
+        val decodedR2 = V2LicenseCodec.decodeR2Request(rawInput)
+        if (decodedR2 != null) {
+            val platformStr = if (decodedR2.platform == V2LicenseCodec.PLATFORM_WINDOWS) "windows" else "android"
+            val devInfo = ClientDeviceInfo(
+                manufacturer = decodedR2.manufacturer,
+                model = decodedR2.model,
+                osVersion = decodedR2.osVersion,
+                abi = decodedR2.abi,
+                appVersion = decodedR2.appVersion,
+                clientDeviceId = decodedR2.clientDeviceId,
+                platform = platformStr
+            )
+            return ParsedActivationRequest(
+                installationId = decodedR2.installationId,
+                deviceInfo = devInfo,
+                clientDeviceId = decodedR2.clientDeviceId,
+                platformCode = decodedR2.platform,
+                fpType = decodedR2.fpType,
+                deviceHash6 = decodedR2.deviceHash6,
+                installNonce = decodedR2.installNonce
+            )
+        }
+
         val bar1Match = BAR1_REGEX.find(rawInput)
         if (bar1Match != null) {
             val base64Payload = bar1Match.groupValues[1]
@@ -226,9 +281,118 @@ object AdminLicenseGenerator {
     }
 
     /**
-     * Parses the payload from a generated license code.
+     * Generates a 16-char short V2 license code (XXXX-XXXX-XXXX-XXXX) bound to the R2 device fingerprint
+     * and install nonce using HMAC-SHA256.
+     */
+    fun generateV2License(
+        parsedRequest: ParsedActivationRequest,
+        durationDays: Long = 0L,
+        maxWorkspaces: Int = 0,
+        excelExport: Boolean = true,
+        appLock: Boolean = true,
+        allowAccess: Boolean = true,
+        platform: Int = parsedRequest.platformCode ?: V2LicenseCodec.PLATFORM_ANDROID,
+        planType: String? = null,
+        nowSeconds: Long = System.currentTimeMillis() / 1000L
+    ): Result<String> {
+        val fpType = parsedRequest.fpType
+        val hash6 = parsedRequest.deviceHash6
+        val nonce = parsedRequest.installNonce
+        if (fpType == null || hash6 == null || hash6.size != 6 || nonce == null) {
+            return Result.failure(IllegalArgumentException("بيانات طلب R2 مطلوبة لتوليد كود التفعيل المختصر."))
+        }
+        return generateV2License(
+            fpType = fpType,
+            deviceHash6 = hash6,
+            installNonce = nonce,
+            durationDays = durationDays,
+            maxWorkspaces = maxWorkspaces,
+            excelExport = excelExport,
+            appLock = appLock,
+            allowAccess = allowAccess,
+            platform = platform,
+            planType = planType,
+            nowSeconds = nowSeconds
+        )
+    }
+
+    fun generateV2License(
+        fpType: Int,
+        deviceHash6: ByteArray,
+        installNonce: Int,
+        durationDays: Long = 0L,
+        maxWorkspaces: Int = 0,
+        excelExport: Boolean = true,
+        appLock: Boolean = true,
+        allowAccess: Boolean = true,
+        platform: Int = V2LicenseCodec.PLATFORM_ANDROID,
+        planType: String? = null,
+        nowSeconds: Long = System.currentTimeMillis() / 1000L
+    ): Result<String> {
+        return try {
+            require(deviceHash6.size == 6) { "deviceHash6 must be 6 bytes" }
+            val resolvedPlanType = planType ?: when (durationDays) {
+                0L -> "lifetime"
+                7L -> "trial"
+                30L -> "monthly"
+                90L -> "quarterly"
+                365L -> "yearly"
+                else -> "custom"
+            }
+            val planCode = V2LicenseCodec.encodePlanType(resolvedPlanType)
+            val expiryDays = V2LicenseCodec.calculateExpiryDaysSince2025(durationDays, nowSeconds)
+            val code = V2LicenseCodec.generateShortLicenseCode(
+                platform = platform,
+                expiryDaysSince2025 = expiryDays,
+                planTypeCode = planCode,
+                maxFolders = maxWorkspaces.coerceIn(0, 127),
+                allowExcel = excelExport,
+                allowAppLock = appLock,
+                allowAccess = allowAccess,
+                fpType = fpType,
+                deviceHash6 = deviceHash6,
+                installNonce = installNonce
+            )
+            Result.success(code)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Parses the payload from either a 16-char V2 license code or a legacy BA1. license code.
      */
     fun parsePayload(licenseCode: String): AdminLicensePayload {
+        return parsePayload(
+            licenseCode = licenseCode,
+            installationId = "",
+            clientName = null,
+            issuedAt = System.currentTimeMillis() / 1000L
+        )
+    }
+
+    fun parsePayload(
+        licenseCode: String,
+        installationId: String = "",
+        clientName: String? = null,
+        issuedAt: Long = System.currentTimeMillis() / 1000L
+    ): AdminLicensePayload {
+        if (!licenseCode.contains(".") && V2LicenseCodec.looksLikeV2LicenseCode(licenseCode)) {
+            val decoded = V2LicenseCodec.decodeShortLicensePayloadWithoutVerify(licenseCode)
+                ?: throw IllegalArgumentException("صيغة الترخيص المختصر غير صالحة")
+            return AdminLicensePayload(
+                v = 2,
+                id = installationId,
+                n = clientName?.trim()?.takeIf { it.isNotBlank() },
+                iat = issuedAt,
+                exp = decoded.expEpochSeconds,
+                mw = decoded.maxFolders,
+                ex = if (decoded.allowExcel) 1 else 0,
+                lk = if (decoded.allowAppLock) 1 else 0,
+                bg = if (decoded.allowAccess) 1 else 0
+            )
+        }
+
         val parts = licenseCode.trim().split(".")
         require(parts.size == 3 && parts[0] == PREFIX) { "صيغة الترخيص غير صحيحة" }
 

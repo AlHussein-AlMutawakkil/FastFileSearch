@@ -19,7 +19,11 @@ data class IssuedLicenseItem(
     val osVersion: String = "",
     val abi: String = "",
     val appVersion: String = "",
-    val clientDeviceId: String = ""
+    val clientDeviceId: String = "",
+    val r2FpType: Int? = null,
+    val r2DeviceHash6Hex: String? = null,
+    val r2InstallNonce: Int? = null,
+    val platformCode: Int? = null
 )
 
 data class LicenseRenewalDraft(
@@ -97,6 +101,10 @@ object LicenseHistoryManager {
             if (item.abi.isNotBlank()) sb.append(",\"abi\":\"").append(escape(item.abi)).append("\"")
             if (item.appVersion.isNotBlank()) sb.append(",\"v\":\"").append(escape(item.appVersion)).append("\"")
             if (item.clientDeviceId.isNotBlank()) sb.append(",\"cdid\":\"").append(escape(item.clientDeviceId)).append("\"")
+            if (item.r2FpType != null) sb.append(",\"r2Fp\":").append(item.r2FpType)
+            if (!item.r2DeviceHash6Hex.isNullOrBlank()) sb.append(",\"r2Hash\":\"").append(escape(item.r2DeviceHash6Hex)).append("\"")
+            if (item.r2InstallNonce != null) sb.append(",\"r2Nonce\":").append(item.r2InstallNonce)
+            if (item.platformCode != null) sb.append(",\"plat\":").append(item.platformCode)
             sb.append("}")
             if (index < list.size - 1) sb.append(",")
         }
@@ -127,6 +135,11 @@ object LicenseHistoryManager {
                 return p.find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0
             }
 
+            fun getNullableInt(key: String): Int? {
+                val p = "\"$key\"\\s*:\\s*(-?\\d+)".toRegex()
+                return p.find(body)?.groupValues?.get(1)?.toIntOrNull()
+            }
+
             val internalId = getStr("id").ifEmpty { UUID.randomUUID().toString() }
             val installationId = getStr("instId")
             val clientName = getStr("client").takeIf { it.isNotBlank() }
@@ -143,6 +156,10 @@ object LicenseHistoryManager {
             val abi = getStr("abi")
             val appVersion = getStr("v")
             val clientDeviceId = getStr("cdid")
+            val r2FpType = getNullableInt("r2Fp")
+            val r2DeviceHash6Hex = getStr("r2Hash").takeIf { it.isNotBlank() }
+            val r2InstallNonce = getNullableInt("r2Nonce")
+            val platformCode = getNullableInt("plat")
 
             if (code.isNotBlank()) {
                 result.add(
@@ -162,7 +179,11 @@ object LicenseHistoryManager {
                         osVersion = osVersion,
                         abi = abi,
                         appVersion = appVersion,
-                        clientDeviceId = clientDeviceId
+                        clientDeviceId = clientDeviceId,
+                        r2FpType = r2FpType,
+                        r2DeviceHash6Hex = r2DeviceHash6Hex,
+                        r2InstallNonce = r2InstallNonce,
+                        platformCode = platformCode
                     )
                 )
             }

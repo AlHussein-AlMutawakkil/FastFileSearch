@@ -2,11 +2,13 @@ package com.example.fastfilesearch.licensing
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.fastfilesearch.util.ClientDeviceIdProvider
 import java.security.SecureRandom
 
 object InstallationIdManager {
     private const val PREFS_NAME = "installation_prefs"
     private const val KEY_INSTALLATION_ID = "installation_id"
+    private const val KEY_INSTALL_NONCE = "install_nonce_v2"
 
     // Characters excluding ambiguous characters: 0, O, 1, I
     private const val ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -14,6 +16,32 @@ object InstallationIdManager {
 
     @Volatile
     private var cachedId: String? = null
+
+    @Volatile
+    private var cachedNonce: Int? = null
+
+    @Synchronized
+    fun getOrCreateInstallNonce(context: Context): Int {
+        cachedNonce?.let { return it }
+
+        val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val existing = prefs.getInt(KEY_INSTALL_NONCE, -1)
+        if (existing in 0..0xFFFF) {
+            cachedNonce = existing
+            return existing
+        }
+
+        val generated = random.nextInt(0x10000)
+        prefs.edit().putInt(KEY_INSTALL_NONCE, generated).apply()
+        cachedNonce = generated
+        return generated
+    }
+
+    fun getR2InstallationId(context: Context): String {
+        val fp = ClientDeviceIdProvider.getFingerprintInfo(context)
+        val nonce = getOrCreateInstallNonce(context)
+        return V2LicenseCodec.deriveInstallationId(fp.fpType, fp.digestPrefix6, nonce)
+    }
 
     @Synchronized
     fun getInstallationId(context: Context): String {
@@ -23,7 +51,11 @@ object InstallationIdManager {
         var id = prefs.getString(KEY_INSTALLATION_ID, null)
 
         if (id.isNullOrBlank() || !isValidFormat(id)) {
-            id = generateNewId()
+            id = try {
+                getR2InstallationId(context)
+            } catch (_: Throwable) {
+                generateNewId()
+            }
             prefs.edit().putString(KEY_INSTALLATION_ID, id).apply()
         }
 
@@ -66,6 +98,7 @@ object InstallationIdManager {
     // For testing / reset purposes only
     internal fun resetForTesting(context: Context) {
         cachedId = null
+        cachedNonce = null
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
     }
 }

@@ -3,6 +3,7 @@ package com.example.fastfilesearch.licensing
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.SystemClock
+import com.example.fastfilesearch.util.ClientDeviceIdProvider
 import java.nio.charset.StandardCharsets
 import java.util.Base64
 import javax.crypto.Mac
@@ -36,9 +37,14 @@ class LicenseManager(private val context: Context) {
 
     @Synchronized
     fun activateLicense(rawCode: String): LicenseVerificationResult {
+        val fp = ClientDeviceIdProvider.getFingerprintInfo(context)
+        val nonce = InstallationIdManager.getOrCreateInstallNonce(context)
         val verification = LicenseVerifier.verify(
             rawCode = rawCode,
-            expectedInstallationId = installationId
+            expectedInstallationId = installationId,
+            deviceFpType = fp.fpType,
+            deviceHash6 = fp.digestPrefix6,
+            installNonce = nonce
         )
 
         if (verification.status == LicenseStatus.ACTIVE && verification.payload != null) {
@@ -71,9 +77,14 @@ class LicenseManager(private val context: Context) {
             )
         }
 
+        val fp = ClientDeviceIdProvider.getFingerprintInfo(context)
+        val nonce = InstallationIdManager.getOrCreateInstallNonce(context)
         val verification = LicenseVerifier.verify(
             rawCode = savedCode,
-            expectedInstallationId = installationId
+            expectedInstallationId = installationId,
+            deviceFpType = fp.fpType,
+            deviceHash6 = fp.digestPrefix6,
+            installNonce = nonce
         )
 
         if (verification.status != LicenseStatus.ACTIVE || verification.payload == null) {
@@ -161,14 +172,25 @@ class LicenseManager(private val context: Context) {
             }
         }
 
-        // 2) Check if current wall time is before license issue date by > 5 minutes
-        val iatMs = payload.iat * 1000L
-        if (nowWall < iatMs - FIVE_MINUTES_MS) {
-            return LicenseVerificationResult(
-                status = LicenseStatus.CLOCK_TAMPERED,
-                payload = payload,
-                errorMessage = "وقت الجهاز الحالي يسبق تاريخ إصدار الترخيص. يرجى ضبط الساعة."
-            )
+        // 2) Check if current wall time is before license issue date by > 5 minutes (or pre-2025 for V2)
+        if (payload.iat > 0L) {
+            val iatMs = payload.iat * 1000L
+            if (nowWall < iatMs - FIVE_MINUTES_MS) {
+                return LicenseVerificationResult(
+                    status = LicenseStatus.CLOCK_TAMPERED,
+                    payload = payload,
+                    errorMessage = "وقت الجهاز الحالي يسبق تاريخ إصدار الترخيص. يرجى ضبط الساعة."
+                )
+            }
+        } else if (payload.v >= 2) {
+            val minV2EpochMs = V2LicenseCodec.EPOCH_2025_DAY * 86_400L * 1000L
+            if (nowWall < minV2EpochMs) {
+                return LicenseVerificationResult(
+                    status = LicenseStatus.CLOCK_TAMPERED,
+                    payload = payload,
+                    errorMessage = "تاريخ الجهاز الحالي غير صحيح. يرجى ضبط الساعة."
+                )
+            }
         }
 
         // 3) Check expiration (if not permanent)

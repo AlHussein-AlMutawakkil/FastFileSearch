@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Lock
@@ -50,7 +49,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +68,7 @@ import com.example.fastfilesearch.ui.designsystem.AppSectionCard
 import com.example.fastfilesearch.ui.designsystem.AppTopBar
 import com.example.fastfilesearch.ui.designsystem.LocalAppColors
 import com.example.fastfilesearch.ui.designsystem.ProvideAppDesignTokens
+import com.example.fastfilesearch.util.DeviceInfoHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -91,7 +90,7 @@ fun LicenseSettingsScreen(
         val colors = LocalAppColors.current
 
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            val installationId = remember { licenseManager.installationId }
+            val deviceRequestCode = remember { DeviceInfoHelper.buildR2ActivationRequest(context) }
             var licenseStatus by remember { mutableStateOf(licenseManager.getLicenseStatus()) }
             var payload by remember { mutableStateOf(licenseManager.getActivePayload()) }
             var showUpdateDialog by remember { mutableStateOf(false) }
@@ -148,54 +147,24 @@ fun LicenseSettingsScreen(
                             )
                         }
 
-                        if (!payload?.n.isNullOrBlank()) {
-                            item {
-                                AppNavigationRow(
-                                    title = "المرخّص له",
-                                    value = payload?.n ?: "",
-                                    showChevron = false
-                                )
-                            }
-                        }
-
                         item {
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 15.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "معرّف التثبيت",
-                                        fontSize = 15.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = colors.textPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = installationId,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontSize = 13.sp,
-                                        color = colors.textSecondary
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        clipboardManager.setText(AnnotatedString(installationId))
-                                        Toast.makeText(context, "تم نسخ معرّف التثبيت", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.ContentCopy,
-                                        contentDescription = "نسخ المعرّف",
-                                        tint = colors.textSecondary,
-                                        modifier = Modifier.size(19.dp)
-                                    )
-                                }
+                                Text(
+                                    text = "معرّف الجهاز",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = colors.textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                DeviceRequestCodeBlock(
+                                    code = deviceRequestCode,
+                                    copyToastMessage = "تم نسخ معرّف الجهاز",
+                                    shareChooserTitle = "مشاركة معرّف الجهاز"
+                                )
                             }
                         }
 
