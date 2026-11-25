@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,20 +20,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -50,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,9 +68,33 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class HistoryStatusFilter(val label: String) {
+    ALL("الكل"),
+    ACTIVE("النشطة"),
+    EXPIRING_SOON("قريب الانتهاء"),
+    EXPIRED("المنتهية")
+}
+
+internal fun matchesHistoryFilter(
+    item: IssuedLicenseItem,
+    filter: HistoryStatusFilter,
+    nowSeconds: Long = System.currentTimeMillis() / 1000L
+): Boolean {
+    return when (filter) {
+        HistoryStatusFilter.ALL -> true
+        HistoryStatusFilter.ACTIVE -> item.exp <= 0L || item.exp > nowSeconds
+        HistoryStatusFilter.EXPIRING_SOON -> {
+            item.exp > nowSeconds && (item.exp - nowSeconds) <= 7L * 86_400L
+        }
+        HistoryStatusFilter.EXPIRED -> item.exp > 0L && nowSeconds > item.exp
+    }
+}
+
 @Composable
 fun HistoryScreen(
     onBack: () -> Unit,
+    onOpenDetail: (IssuedLicenseItem) -> Unit,
+    onRenew: (IssuedLicenseItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -73,20 +102,24 @@ fun HistoryScreen(
 
     var historyList by remember { mutableStateOf(LicenseHistoryManager.getHistory(context)) }
     var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf(HistoryStatusFilter.ALL) }
     var itemToDelete by remember { mutableStateOf<IssuedLicenseItem?>(null) }
     var showClearAllDialog by remember { mutableStateOf(false) }
 
-    val filteredList = remember(historyList, searchQuery) {
-        if (searchQuery.isBlank()) {
-            historyList
-        } else {
-            val q = searchQuery.trim().lowercase(Locale.ROOT)
-            historyList.filter {
-                (it.clientName?.lowercase(Locale.ROOT)?.contains(q) == true) ||
-                        it.installationId.lowercase(Locale.ROOT).contains(q) ||
-                        it.manufacturer.lowercase(Locale.ROOT).contains(q) ||
-                        it.model.lowercase(Locale.ROOT).contains(q)
+    val filteredList = remember(historyList, searchQuery, selectedFilter) {
+        val nowSec = System.currentTimeMillis() / 1000L
+        val q = searchQuery.trim().lowercase(Locale.ROOT)
+        historyList.filter { item ->
+            val matchesStatus = matchesHistoryFilter(item, selectedFilter, nowSec)
+            val matchesSearch = if (q.isBlank()) {
+                true
+            } else {
+                (item.clientName?.lowercase(Locale.ROOT)?.contains(q) == true) ||
+                    item.installationId.lowercase(Locale.ROOT).contains(q) ||
+                    item.manufacturer.lowercase(Locale.ROOT).contains(q) ||
+                    item.model.lowercase(Locale.ROOT).contains(q)
             }
+            matchesStatus && matchesSearch
         }
     }
 
@@ -134,6 +167,39 @@ fun HistoryScreen(
                 )
             }
 
+            // Status Filter Chips
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(HistoryStatusFilter.entries, key = { it.name }) { filterOption ->
+                    val isSelected = selectedFilter == filterOption
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(AdminDesignTokens.ChipCornerRadius))
+                            .background(if (isSelected) colors.controlActiveBackground else colors.cardBackground)
+                            .border(
+                                AdminDesignTokens.DividerThickness,
+                                if (isSelected) colors.controlActiveBackground else colors.divider,
+                                RoundedCornerShape(AdminDesignTokens.ChipCornerRadius)
+                            )
+                            .clickable { selectedFilter = filterOption }
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = filterOption.label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) colors.controlActiveContent else colors.textPrimary
+                        )
+                    }
+                }
+            }
+
             if (filteredList.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -152,7 +218,11 @@ fun HistoryScreen(
                             modifier = Modifier.size(48.dp)
                         )
                         Text(
-                            text = if (searchQuery.isBlank()) "لا توجد تراخيص مصدّرة بعد" else "لا توجد نتائج مطابقة للبحث",
+                            text = if (searchQuery.isBlank() && selectedFilter == HistoryStatusFilter.ALL) {
+                                "لا توجد تراخيص مصدّرة بعد"
+                            } else {
+                                "لا توجد نتائج مطابقة"
+                            },
                             color = colors.textSecondary,
                             fontSize = 14.sp
                         )
@@ -165,11 +235,13 @@ fun HistoryScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
                         .navigationBarsPadding(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(filteredList, key = { it.internalId }) { item ->
-                        HistoryItemCard(
+                        CompactHistoryItemCard(
                             item = item,
+                            onClick = { onOpenDetail(item) },
+                            onRenew = { onRenew(item) },
                             onCopy = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = ClipData.newPlainText("License Code", item.licenseCode)
@@ -288,28 +360,33 @@ fun HistoryScreen(
 }
 
 @Composable
-fun HistoryItemCard(
+private fun CompactHistoryItemCard(
     item: IssuedLicenseItem,
+    onClick: () -> Unit,
+    onRenew: () -> Unit,
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalAdminColors.current
-    val dateFormat = remember { SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()) }
-    val issueDateStr = remember(item.iat) { dateFormat.format(Date(item.iat * 1000L)) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val expiryStr = remember(item.exp) {
         if (item.exp <= 0L) {
-            "دائم (بلا انتهاء)"
+            "دائم"
         } else {
             val expDate = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()).format(Date(item.exp * 1000L))
             val isExpired = System.currentTimeMillis() / 1000L > item.exp
-            if (isExpired) "منتهي في $expDate" else "ينتهي في $expDate"
+            if (isExpired) "منتهي $expDate" else expDate
         }
     }
 
-    Column(
+    val devName = remember(item.manufacturer, item.model) {
+        listOf(item.manufacturer, item.model).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(AdminDesignTokens.CardCornerRadius))
@@ -319,169 +396,172 @@ fun HistoryItemCard(
                 colors.divider,
                 RoundedCornerShape(AdminDesignTokens.CardCornerRadius)
             )
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Header: Client Name + Installation ID
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
                     text = item.clientName ?: "عميل غير مسمى",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = item.installationId,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    color = colors.textSecondary
-                )
-            }
 
-            // Expiry Badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(colors.subCardBackground)
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = expiryStr,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary
-                )
-            }
-        }
-
-        // Details Row: Date + Features
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "تاريخ الإصدار: $issueDateStr",
-                fontSize = 12.sp,
-                color = colors.textSecondary
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (item.excelExport) PermissionTag(text = "Excel")
-                if (item.appLock) PermissionTag(text = "قفل")
-                if (item.bgSync) PermissionTag(text = "مزامنة")
-            }
-        }
-
-        // Client Device Info (if available)
-        if (item.manufacturer.isNotBlank() || item.model.isNotBlank() || item.osVersion.isNotBlank()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(colors.subCardBackground)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val devName = listOf(item.manufacturer, item.model).filter { it.isNotBlank() }.joinToString(" ")
-                Text(
-                    text = if (devName.isNotBlank()) devName else "جهاز العميل",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.textPrimary
-                )
-                val extra = listOf(item.osVersion, item.appVersion).filter { it.isNotBlank() }.joinToString(" • ")
-                if (extra.isNotBlank()) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(colors.subCardBackground)
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                ) {
                     Text(
-                        text = extra,
+                        text = expiryStr,
                         fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
                         color = colors.textSecondary
                     )
                 }
             }
-        }
 
-        // Code Preview Box
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(AdminDesignTokens.SubCardCornerRadius))
-                .background(colors.subCardBackground)
-                .padding(horizontal = 10.dp, vertical = 8.dp)
-        ) {
+            val subtitle = if (devName.isNotBlank()) {
+                "${item.installationId} • $devName"
+            } else {
+                item.installationId
+            }
+
             Text(
-                text = item.licenseCode,
+                text = subtitle,
                 fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = colors.textSecondary,
-                maxLines = 2
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
-        // Actions: Copy, Share, Delete
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Box {
             IconButton(
-                onClick = onCopy,
-                modifier = Modifier.size(36.dp)
+                onClick = { menuExpanded = true },
+                modifier = Modifier.size(38.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.ContentCopy,
-                    contentDescription = "نسخ",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(18.dp)
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = "خيارات",
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(20.dp)
                 )
             }
-            IconButton(
-                onClick = onShare,
-                modifier = Modifier.size(36.dp)
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                modifier = Modifier
+                    .background(colors.cardBackground)
+                    .border(
+                        AdminDesignTokens.DividerThickness,
+                        colors.divider,
+                        RoundedCornerShape(10.dp)
+                    )
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Share,
-                    contentDescription = "مشاركة",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(18.dp)
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "تجديد الترخيص",
+                            color = colors.textPrimary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Autorenew,
+                            contentDescription = null,
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onRenew()
+                    }
                 )
-            }
-            IconButton(
-                onClick = onDelete,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.DeleteOutline,
-                    contentDescription = "حذف",
-                    tint = colors.statusError,
-                    modifier = Modifier.size(18.dp)
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "نسخ الكود",
+                            color = colors.textPrimary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.ContentCopy,
+                            contentDescription = null,
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onCopy()
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "مشاركة",
+                            color = colors.textPrimary,
+                            fontSize = 14.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.Share,
+                            contentDescription = null,
+                            tint = colors.textPrimary,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onShare()
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "حذف",
+                            color = colors.statusError,
+                            fontSize = 14.sp
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = colors.statusError,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete()
+                    }
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun PermissionTag(text: String) {
-    val colors = LocalAdminColors.current
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(colors.divider)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Medium,
-            color = colors.textSecondary
-        )
     }
 }

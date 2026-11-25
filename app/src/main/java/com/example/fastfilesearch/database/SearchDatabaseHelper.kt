@@ -322,12 +322,22 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    data class WorkspaceDeleteStats(
+        val deleted: Boolean,
+        val deletedFilesCount: Int,
+        val deletedSegmentsCount: Int
+    )
+
     fun deleteWorkspace(workspaceId: String): Boolean {
+        return deleteWorkspaceWithStats(workspaceId).deleted
+    }
+
+    fun deleteWorkspaceWithStats(workspaceId: String): WorkspaceDeleteStats {
         val db = writableDatabase
         db.beginTransaction()
         return try {
             // Delete FTS entries
-            db.delete(TABLE_FTS, "$FTS_COL_WS_ID = ?", arrayOf(workspaceId))
+            val segmentsRemoved = db.delete(TABLE_FTS, "$FTS_COL_WS_ID = ?", arrayOf(workspaceId))
 
             // Delete Sheet Headers for files in this workspace
             db.execSQL(
@@ -336,15 +346,19 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             )
 
             // Delete indexed files
-            db.delete(TABLE_FILES, "$COL_FILE_WS_ID = ?", arrayOf(workspaceId))
+            val filesRemoved = db.delete(TABLE_FILES, "$COL_FILE_WS_ID = ?", arrayOf(workspaceId))
 
             // Delete workspace
             val count = db.delete(TABLE_WORKSPACES, "$COL_WS_ID = ?", arrayOf(workspaceId))
             db.setTransactionSuccessful()
-            count > 0
+            WorkspaceDeleteStats(
+                deleted = count > 0,
+                deletedFilesCount = filesRemoved,
+                deletedSegmentsCount = segmentsRemoved
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed deleting workspace $workspaceId", e)
-            false
+            WorkspaceDeleteStats(deleted = false, deletedFilesCount = 0, deletedSegmentsCount = 0)
         } finally {
             db.endTransaction()
         }

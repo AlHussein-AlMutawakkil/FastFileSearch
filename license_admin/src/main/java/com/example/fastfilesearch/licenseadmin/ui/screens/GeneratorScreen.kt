@@ -53,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -75,6 +76,7 @@ import com.example.fastfilesearch.licenseadmin.engine.AdminLicenseGenerator
 import com.example.fastfilesearch.licenseadmin.engine.ClientDeviceInfo
 import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
 import com.example.fastfilesearch.licenseadmin.history.LicenseHistoryManager
+import com.example.fastfilesearch.licenseadmin.history.LicenseRenewalDraft
 import com.example.fastfilesearch.licenseadmin.security.KeyStorageManager
 import com.example.fastfilesearch.licenseadmin.sync.LicenseLogSyncManager
 import com.example.fastfilesearch.licenseadmin.ui.components.AppPrimaryButton
@@ -91,6 +93,8 @@ import com.example.fastfilesearch.licenseadmin.ui.theme.LocalAdminColors
 fun GeneratorScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    renewalDraft: LicenseRenewalDraft? = null,
+    onConsumeRenewalDraft: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -138,6 +142,54 @@ fun GeneratorScreen(
     var excelExport by remember { mutableStateOf(true) }
     var appLock by remember { mutableStateOf(true) }
     var bgSync by remember { mutableStateOf(true) }
+
+    LaunchedEffect(renewalDraft?.requestId) {
+        val draft = renewalDraft ?: return@LaunchedEffect
+        val item = draft.item
+        installationId = item.installationId
+        clientName = item.clientName ?: ""
+        val savedCdid = item.clientDeviceId.takeIf { it.isNotBlank() }
+        clientDeviceId = savedCdid
+        val hasDeviceMeta = item.manufacturer.isNotBlank() ||
+            item.model.isNotBlank() ||
+            item.osVersion.isNotBlank() ||
+            item.abi.isNotBlank() ||
+            item.appVersion.isNotBlank()
+        clientDeviceInfo = if (hasDeviceMeta) {
+            ClientDeviceInfo(
+                manufacturer = item.manufacturer,
+                model = item.model,
+                osVersion = item.osVersion,
+                abi = item.abi,
+                appVersion = item.appVersion,
+                clientDeviceId = savedCdid
+            )
+        } else {
+            null
+        }
+        maxWorkspacesText = item.maxWorkspaces.toString()
+        excelExport = item.excelExport
+        appLock = item.appLock
+        bgSync = item.bgSync
+        if (item.exp <= 0L) {
+            selectedDurationIndex = 4
+        } else {
+            val days = ((item.exp - item.iat + 43200L) / 86400L).coerceAtLeast(1L)
+            when (days) {
+                7L -> selectedDurationIndex = 0
+                30L -> selectedDurationIndex = 1
+                90L -> selectedDurationIndex = 2
+                365L -> selectedDurationIndex = 3
+                else -> {
+                    selectedDurationIndex = 5
+                    customDaysText = days.toString()
+                }
+            }
+        }
+        generatedCode = null
+        generationError = null
+        onConsumeRenewalDraft()
+    }
 
     fun processUri(uri: Uri?) {
         if (uri == null) return
@@ -503,7 +555,8 @@ fun GeneratorScreen(
                                         model = clientDeviceInfo?.model ?: "",
                                         osVersion = clientDeviceInfo?.osVersion ?: "",
                                         abi = clientDeviceInfo?.abi ?: "",
-                                        appVersion = clientDeviceInfo?.appVersion ?: ""
+                                        appVersion = clientDeviceInfo?.appVersion ?: "",
+                                        clientDeviceId = (clientDeviceId ?: clientDeviceInfo?.clientDeviceId).orEmpty()
                                     )
                                 )
 

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class SearchUiState(
     val workspaces: List<Workspace> = emptyList(),
@@ -44,6 +45,13 @@ data class SearchUiState(
     val expandFullCellText: Boolean = true,
     val appTheme: String = "system",
     val defaultSearchMethod: SearchMethod = SearchMethod.CONTAINS,
+    val isSearchHistoryEnabled: Boolean = true,
+    val searchHistory: List<String> = emptyList(),
+    val isDeletingWorkspace: Boolean = false,
+    val deletingWorkspaceMessage: String? = null,
+    val workspaceStatusMessage: String? = null,
+    val isExportingExcel: Boolean = false,
+    val exportingMessage: String? = null,
     val isBackgroundSyncEnabled: Boolean = true,
     val searchFilter: SearchFilter = SearchFilter(),
     val indexedFiles: List<IndexedFileRecord> = emptyList(),
@@ -71,6 +79,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val expandCellPref = searchEngine.isExpandFullCellText()
         val themePref = searchEngine.getAppTheme()
         val defaultMethodPref = searchEngine.getDefaultSearchMethod()
+        val searchHistoryEnabledPref = searchEngine.isSearchHistoryEnabled()
+        val savedHistory = if (searchHistoryEnabledPref) searchEngine.getSearchHistory() else emptyList()
         val bgSyncPref = searchEngine.isBackgroundSyncEnabled()
 
         val licenseManager = LicenseManager.getInstance(application)
@@ -97,6 +107,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 appTheme = themePref,
                 defaultSearchMethod = defaultMethodPref,
                 searchFilter = it.searchFilter.copy(method = defaultMethodPref),
+                isSearchHistoryEnabled = searchHistoryEnabledPref,
+                searchHistory = savedHistory,
                 isBackgroundSyncEnabled = bgSyncPref
             )
         }
@@ -110,6 +122,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 .distinctUntilChanged()
                 .collectLatest { query ->
                     executeSearch(query)
+                }
+        }
+
+        // Record settled queries in search history once user stops typing
+        viewModelScope.launch {
+            searchQueryFlow
+                .debounce(1500L)
+                .distinctUntilChanged()
+                .collectLatest { query ->
+                    if (_uiState.value.isSearchHistoryEnabled && query.trim().length >= 2) {
+                        val updated = withContext(Dispatchers.IO) {
+                            searchEngine.addSearchHistory(query, minLength = 2)
+                        }
+                        _uiState.update { it.copy(searchHistory = updated) }
+                    }
                 }
         }
 
@@ -208,12 +235,71 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onDeleteWorkspace(workspaceId: String) {
-        searchEngine.deleteWorkspace(workspaceId)
-        refreshStatsAndFiles()
-        val currentQuery = _uiState.value.searchQuery
-        if (currentQuery.isNotBlank()) {
-            executeSearch(currentQuery)
+        if (_uiState.value.isDeletingWorkspace) return
+        val wsName = _uiState.value.workspaces.firstOrNull { it.id == workspaceId }?.name ?: "المجلد"
+
+        _uiState.update {
+            it.copy(
+                isDeletingWorkspace = true,
+                deletingWorkspaceMessage = "جارٍ حذف المجلد «$wsName» وتنظيف الفهرس...",
+                workspaceStatusMessage = null
+            )
         }
+
+        viewModelScope.launch {
+            try {
+                val stats = withContext(Dispatchers.IO) {
+                    searchEngine.deleteWorkspaceWithStats(workspaceId)
+                }
+                val statsPair = withContext(Dispatchers.IO) { searchEngine.getIndexStats() }
+                val allFiles = withContext(Dispatchers.IO) { searchEngine.getAllIndexedFiles() }
+                val currentWorkspaces = withContext(Dispatchers.IO) { searchEngine.getAllWorkspaces() }
+                val activeWs = withContext(Dispatchers.IO) { searchEngine.getActiveWorkspace() }
+                val displayName = activeWs?.name ?: if (currentWorkspaces.isNotEmpty()) "جميع المجلدات (${currentWorkspaces.size})" else ""
+
+                val resultMsg = if (stats.deleted) {
+                    "تم حذف المجلد «$wsName» وإزالة ${stats.deletedFilesCount} ملف و ${stats.deletedSegmentsCount} مقطع من الفهرس."
+                } else {
+                    "تعذر حذف المجلد «$wsName»."
+                }
+
+                _uiState.update {
+                    it.copy(
+                        workspaces = currentWorkspaces,
+                        activeWorkspace = activeWs,
+                        folderUri = activeWs?.let { ws -> Uri.parse(ws.uri) },
+                        folderName = displayName,
+                        filesCount = statsPair.first,
+                        segmentsCount = statsPair.second,
+                        indexedFiles = allFiles,
+                        isDeletingWorkspace = false,
+                        deletingWorkspaceMessage = null,
+                        workspaceStatusMessage = resultMsg,
+                        userMessage = resultMsg,
+                        selectionState = it.selectionState.clear()
+                    )
+                }
+
+                val currentQuery = _uiState.value.searchQuery
+                if (currentQuery.isNotBlank()) {
+                    executeSearch(currentQuery)
+                }
+            } catch (t: Throwable) {
+                val errMsg = "فشل حذف المجلد «$wsName»: ${t.localizedMessage}"
+                _uiState.update {
+                    it.copy(
+                        isDeletingWorkspace = false,
+                        deletingWorkspaceMessage = null,
+                        workspaceStatusMessage = errMsg,
+                        userMessage = errMsg
+                    )
+                }
+            }
+        }
+    }
+
+    fun onDismissWorkspaceStatusMessage() {
+        _uiState.update { it.copy(workspaceStatusMessage = null) }
     }
 
     fun onToggleBackgroundSync(enabled: Boolean) {
@@ -299,14 +385,64 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val clean = text.trim()
         if (clean.isBlank()) return
         searchJob?.cancel()
+        val updatedHistory = if (_uiState.value.isSearchHistoryEnabled) {
+            searchEngine.addSearchHistory(clean, minLength = 1)
+        } else {
+            _uiState.value.searchHistory
+        }
         _uiState.update {
             it.copy(
                 searchQuery = clean,
+                searchHistory = updatedHistory,
                 selectionState = it.selectionState.clear()
             )
         }
         searchQueryFlow.value = clean
         executeSearch(clean)
+    }
+
+    fun onSubmitSearch(query: String) {
+        val clean = query.trim()
+        if (clean.isBlank()) return
+        val updatedHistory = if (_uiState.value.isSearchHistoryEnabled) {
+            searchEngine.addSearchHistory(clean, minLength = 1)
+        } else {
+            _uiState.value.searchHistory
+        }
+        _uiState.update {
+            it.copy(
+                searchQuery = clean,
+                searchHistory = updatedHistory,
+                selectionState = it.selectionState.clear()
+            )
+        }
+        searchQueryFlow.value = clean
+        executeSearch(clean)
+    }
+
+    fun onSelectHistoryQuery(query: String) {
+        onSubmitSearch(query)
+    }
+
+    fun onRemoveHistoryItem(query: String) {
+        val updated = searchEngine.removeSearchHistoryItem(query)
+        _uiState.update { it.copy(searchHistory = updated) }
+    }
+
+    fun onClearSearchHistory() {
+        searchEngine.clearSearchHistory()
+        _uiState.update { it.copy(searchHistory = emptyList(), userMessage = "تم مسح سجل البحث السريع") }
+    }
+
+    fun onToggleSearchHistoryEnabled(enabled: Boolean) {
+        searchEngine.setSearchHistoryEnabled(enabled)
+        val history = if (enabled) searchEngine.getSearchHistory() else emptyList()
+        _uiState.update {
+            it.copy(
+                isSearchHistoryEnabled = enabled,
+                searchHistory = history
+            )
+        }
     }
 
     fun onClearQuery() {
@@ -428,6 +564,14 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     fun selectAllRows(allRows: List<SelectedRowData>) {
         _uiState.update { it.copy(selectionState = it.selectionState.selectAllRows(allRows)) }
+    }
+
+    fun addRowsToSelection(rows: List<SelectedRowData>) {
+        _uiState.update { it.copy(selectionState = it.selectionState.addRows(rows)) }
+    }
+
+    fun setExportingState(isExporting: Boolean, message: String? = null) {
+        _uiState.update { it.copy(isExportingExcel = isExporting, exportingMessage = message) }
     }
 
     fun selectAllCells(allCells: List<SelectedCellData>) {

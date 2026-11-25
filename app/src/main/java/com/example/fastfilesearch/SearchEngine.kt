@@ -11,6 +11,7 @@ import com.example.fastfilesearch.database.SearchDatabaseHelper
 import com.example.fastfilesearch.model.FileSegment
 import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchHistoryCodec
 import com.example.fastfilesearch.model.SearchMethod
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.model.Workspace
@@ -74,6 +75,8 @@ class SearchEngine(private val context: Context) {
         private const val KEY_EXPAND_FULL_CELL_TEXT = "expand_full_cell_text"
         private const val KEY_APP_THEME = "app_theme"
         private const val KEY_DEFAULT_SEARCH_METHOD = "default_search_method"
+        private const val KEY_SEARCH_HISTORY_ENABLED = "search_history_enabled"
+        private const val KEY_SEARCH_HISTORY = "search_history_list"
         private const val PARALLEL_WORKERS = 4
     }
 
@@ -164,12 +167,16 @@ class SearchEngine(private val context: Context) {
     }
 
     fun deleteWorkspace(id: String): Boolean {
-        val success = dbHelper.deleteWorkspace(id)
+        return deleteWorkspaceWithStats(id).deleted
+    }
+
+    fun deleteWorkspaceWithStats(id: String): SearchDatabaseHelper.WorkspaceDeleteStats {
+        val stats = dbHelper.deleteWorkspaceWithStats(id)
         if (getActiveWorkspaceId() == id) {
             val remaining = dbHelper.getAllWorkspaces()
             setActiveWorkspaceId(remaining.firstOrNull()?.id)
         }
-        return success
+        return stats
     }
 
     fun getActiveWorkspaceId(): String? {
@@ -257,6 +264,37 @@ class SearchEngine(private val context: Context) {
 
     fun setDefaultSearchMethod(method: SearchMethod) {
         prefs.edit().putString(KEY_DEFAULT_SEARCH_METHOD, method.name).apply()
+    }
+
+    fun isSearchHistoryEnabled(): Boolean {
+        return prefs.getBoolean(KEY_SEARCH_HISTORY_ENABLED, true)
+    }
+
+    fun setSearchHistoryEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SEARCH_HISTORY_ENABLED, enabled).apply()
+    }
+
+    fun getSearchHistory(): List<String> {
+        return SearchHistoryCodec.decode(prefs.getString(KEY_SEARCH_HISTORY, null))
+    }
+
+    fun addSearchHistory(query: String, minLength: Int = 2): List<String> {
+        val current = getSearchHistory()
+        val updated = SearchHistoryCodec.record(current, query, minLength = minLength)
+        if (updated != current) {
+            prefs.edit().putString(KEY_SEARCH_HISTORY, SearchHistoryCodec.encode(updated)).apply()
+        }
+        return updated
+    }
+
+    fun removeSearchHistoryItem(query: String): List<String> {
+        val updated = getSearchHistory().filterNot { it == query }
+        prefs.edit().putString(KEY_SEARCH_HISTORY, SearchHistoryCodec.encode(updated)).apply()
+        return updated
+    }
+
+    fun clearSearchHistory() {
+        prefs.edit().remove(KEY_SEARCH_HISTORY).apply()
     }
 
     // ==========================================
@@ -433,7 +471,7 @@ class SearchEngine(private val context: Context) {
         }
     }
 
-    private fun internalSyncWorkspace(
+    private suspend fun internalSyncWorkspace(
         workspace: Workspace,
         onProgress: (IndexProgress) -> Unit
     ): SyncSummary {
@@ -469,25 +507,35 @@ class SearchEngine(private val context: Context) {
         }
 
         val filesToIndex = toAdd + toUpdate
-        for ((idx, file) in filesToIndex.withIndex()) {
-            onProgress(
-                IndexProgress(
-                    current = idx + 1,
-                    total = filesToIndex.size,
-                    currentFileName = file.name,
-                    isIndexing = true,
-                    statusMessage = "فهرسة (${idx + 1}/${filesToIndex.size}): ${file.name}"
-                )
-            )
-            if (existingMap.containsKey(file.uri.toString())) {
-                dbHelper.deleteFileChunks(file.uri.toString())
+        val totalToIndex = filesToIndex.size
+        val processedCounter = AtomicInteger(0)
+
+        if (totalToIndex > 0) {
+            val semaphore = Semaphore(PARALLEL_WORKERS)
+            coroutineScope {
+                filesToIndex.map { file ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            val count = processedCounter.incrementAndGet()
+                            onProgress(
+                                IndexProgress(
+                                    current = count,
+                                    total = totalToIndex,
+                                    currentFileName = file.name,
+                                    isIndexing = true,
+                                    statusMessage = "فهرسة ($count/$totalToIndex): ${file.name}"
+                                )
+                            )
+                            indexSingleFile(workspace.id, file)
+                        }
+                    }
+                }.awaitAll()
             }
-            indexSingleFile(workspace.id, file)
         }
 
         return SyncSummary(
             totalFound = discoveredFiles.size,
-            indexedCount = filesToIndex.size,
+            indexedCount = totalToIndex,
             skippedCount = skippedCount,
             deletedCount = toDelete.size
         )

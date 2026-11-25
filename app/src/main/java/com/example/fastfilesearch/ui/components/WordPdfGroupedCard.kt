@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
@@ -70,6 +71,9 @@ fun WordPdfGroupedCard(
     showAllRows: Boolean = true,
     selectionState: SelectionState = SelectionState(),
     onToggleRowSelection: ((SelectedRowData) -> Unit)? = null,
+    onExportFileResults: ((List<SearchResult>, Boolean) -> Unit)? = null,
+    fileRecord: IndexedFileRecord? = null,
+    workspaceName: String? = null,
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
@@ -87,10 +91,33 @@ fun WordPdfGroupedCard(
     val highlightFg = if (isDark) Color(0xFFFFE082) else Color(0xFF332600)
 
     var isCardExpanded by remember { mutableStateOf(true) }
+    var showHeaderMenu by remember { mutableStateOf(false) }
+    var showFileDetailsDialog by remember { mutableStateOf(false) }
+    var showExportChoiceDialog by remember { mutableStateOf(false) }
     val arrowRotation by animateFloatAsState(
         targetValue = if (isCardExpanded) 0f else 180f,
         label = "wordPdfExpandArrow"
     )
+
+    if (showFileDetailsDialog) {
+        FileDetailsDialog(
+            fileName = group.fileName,
+            matchesCount = group.results.size,
+            fileRecord = fileRecord,
+            workspaceName = workspaceName,
+            onOpenFile = onOpenFile,
+            onDismissRequest = { showFileDetailsDialog = false }
+        )
+    }
+
+    if (showExportChoiceDialog) {
+        FileExportChoiceDialog(
+            fileName = group.fileName,
+            onDismissRequest = { showExportChoiceDialog = false },
+            onSaveToDevice = { onExportFileResults?.invoke(group.results, true) },
+            onShareFile = { onExportFileResults?.invoke(group.results, false) }
+        )
+    }
 
     var showUnifiedDialog by remember { mutableStateOf(false) }
 
@@ -127,58 +154,74 @@ fun WordPdfGroupedCard(
             .background(appColors.cardBackground)
     ) {
         // Top Bar: file icon, file name, matches count badge, and collapse arrow
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(topBarBg)
-                .clickable { isCardExpanded = !isCardExpanded }
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = visual.icon,
-                contentDescription = visual.typeName,
-                tint = visual.color,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
-                text = group.fileName,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = topBarTextColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Matches Count Badge (numbers only)
-            Box(
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .background(topBarBg)
+                    .combinedClickable(
+                        onClick = { isCardExpanded = !isCardExpanded },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showHeaderMenu = true
+                        }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = visual.icon,
+                    contentDescription = visual.typeName,
+                    tint = visual.color,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
                 Text(
-                    text = "${group.results.size}",
-                    color = if (isDark) Color(0xFFE4E7EB) else visual.color,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    text = group.fileName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = topBarTextColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Matches Count Badge (numbers only)
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${group.results.size}",
+                        color = if (isDark) Color(0xFFE4E7EB) else visual.color,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
+                    tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
+                    modifier = Modifier
+                        .size(19.dp)
+                        .rotate(arrowRotation)
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
-                contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
-                tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
-                modifier = Modifier
-                    .size(19.dp)
-                    .rotate(arrowRotation)
+            FileHeaderActionMenu(
+                expanded = showHeaderMenu,
+                onDismissRequest = { showHeaderMenu = false },
+                onOpenFile = onOpenFile,
+                onExportToExcel = { showExportChoiceDialog = true },
+                onShowDetails = { showFileDetailsDialog = true }
             )
         }
 

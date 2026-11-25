@@ -92,6 +92,13 @@ data class SelectionState(
         return copy(mode = SelectionMode.ROWS, selectedRows = newMap, selectedCells = emptyMap())
     }
 
+    fun addRows(rows: List<SelectedRowData>): SelectionState {
+        if (rows.isEmpty()) return this
+        val newMap = if (mode == SelectionMode.ROWS) selectedRows.toMutableMap() else mutableMapOf()
+        rows.forEach { newMap[it.key] = it }
+        return copy(mode = SelectionMode.ROWS, selectedRows = newMap, selectedCells = emptyMap())
+    }
+
     fun selectAllCells(allCells: List<SelectedCellData>): SelectionState {
         if (allCells.isEmpty()) return SelectionState(SelectionMode.NONE)
         val newMap = allCells.associateBy { it.key }

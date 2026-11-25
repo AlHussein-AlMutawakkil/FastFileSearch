@@ -58,3 +58,40 @@ data class SearchFilter(
                 selectedWorkspaceIds.isNotEmpty()
     }
 }
+
+object SearchHistoryCodec {
+    const val MAX_HISTORY_ITEMS = 10
+
+    fun decode(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return raw.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(MAX_HISTORY_ITEMS)
+            .toList()
+    }
+
+    fun encode(items: List<String>): String {
+        return items
+            .map { it.replace('\n', ' ').replace('\r', ' ').trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(MAX_HISTORY_ITEMS)
+            .joinToString("\n")
+    }
+
+    fun record(current: List<String>, newQuery: String, minLength: Int = 2): List<String> {
+        val clean = newQuery.replace('\n', ' ').replace('\r', ' ').trim()
+        if (clean.length < minLength) return current
+        val updated = ArrayList<String>(MAX_HISTORY_ITEMS)
+        updated.add(clean)
+        for (item in current) {
+            if (item != clean) {
+                updated.add(item)
+            }
+            if (updated.size >= MAX_HISTORY_ITEMS) break
+        }
+        return updated
+    }
+}

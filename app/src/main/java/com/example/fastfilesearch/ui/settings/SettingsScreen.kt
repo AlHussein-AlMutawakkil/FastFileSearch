@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -19,14 +21,19 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
 import com.example.fastfilesearch.ui.designsystem.AppNavigationRow
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
@@ -46,6 +53,8 @@ fun SettingsScreen(
     onNavigateToWorkspaces: () -> Unit = {},
     onToggleBackgroundSync: (Boolean) -> Unit = {},
     onNavigateToDefaultSearchMethod: () -> Unit = {},
+    onToggleSearchHistoryEnabled: (Boolean) -> Unit = {},
+    onClearSearchHistory: () -> Unit = {},
     onNavigateToTheme: () -> Unit,
     onNavigateToPermissions: () -> Unit,
     onNavigateToAppLock: () -> Unit = {},
@@ -93,9 +102,10 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // CARD 1: المجلدات والمزامنة وتحديث الفهرس
+            // SECTION 1: المجلدات والفهرسة
+            SettingsSectionLabel(title = "المجلدات والفهرسة")
             AppSectionCard {
                 item {
                     AppNavigationRow(
@@ -127,7 +137,48 @@ fun SettingsScreen(
                 }
             }
 
-            // CARD 2: إعدادات الجداول الأربعة مع الشروحات
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // SECTION 2: إعدادات البحث
+            SettingsSectionLabel(title = "البحث")
+            AppSectionCard {
+                item {
+                    AppNavigationRow(
+                        title = "طريقة البحث الافتراضية",
+                        value = uiState.defaultSearchMethod.displayName,
+                        icon = Icons.Outlined.Search,
+                        showChevron = false,
+                        onClick = onNavigateToDefaultSearchMethod
+                    )
+                }
+
+                item {
+                    AppToggleRow(
+                        title = "حفظ سجل البحث السريع",
+                        subtitle = "حفظ آخر كلمات البحث للوصول السريع محلياً دون اتصال",
+                        checked = uiState.isSearchHistoryEnabled,
+                        onCheckedChange = onToggleSearchHistoryEnabled,
+                        icon = Icons.Outlined.History
+                    )
+                }
+
+                if (uiState.isSearchHistoryEnabled && uiState.searchHistory.isNotEmpty()) {
+                    item {
+                        AppNavigationRow(
+                            title = "مسح سجل البحث السريع",
+                            value = "${uiState.searchHistory.size} عنصر",
+                            icon = Icons.Outlined.DeleteSweep,
+                            showChevron = false,
+                            onClick = onClearSearchHistory
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // SECTION 3: عرض الجداول والنتائج
+            SettingsSectionLabel(title = "الجداول والنتائج")
             AppSectionCard {
                 item {
                     AppToggleRow(
@@ -170,18 +221,11 @@ fun SettingsScreen(
                 }
             }
 
-            // CARD 3: المجموعة الأخيرة: طريقة البحث الافتراضية، المظهر، الأذونات، الصيغ المدعومة، حول التطبيق
-            AppSectionCard {
-                item {
-                    AppNavigationRow(
-                        title = "طريقة البحث الافتراضية",
-                        value = uiState.defaultSearchMethod.displayName,
-                        icon = Icons.Outlined.Search,
-                        showChevron = false,
-                        onClick = onNavigateToDefaultSearchMethod
-                    )
-                }
+            Spacer(modifier = Modifier.height(4.dp))
 
+            // SECTION 4: التخصيص والأمان والنظام
+            SettingsSectionLabel(title = "التخصيص والأمان والنظام")
+            AppSectionCard {
                 item {
                     AppNavigationRow(
                         title = "المظهر",
@@ -239,6 +283,20 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
+}
+
+@Composable
+private fun SettingsSectionLabel(title: String) {
+    val colors = LocalAppColors.current
+    Text(
+        text = title,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = colors.textSecondary,
+        modifier = Modifier.padding(horizontal = 4.dp)
+    )
 }

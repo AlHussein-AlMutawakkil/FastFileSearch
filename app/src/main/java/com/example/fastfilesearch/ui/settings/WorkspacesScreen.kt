@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,17 +28,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,13 +75,20 @@ fun WorkspacesScreen(
     onAddWorkspace: (Uri, String) -> Unit,
     onRenameWorkspace: (String, String) -> Unit,
     onDeleteWorkspace: (String) -> Unit,
+    onDismissStatusMessage: () -> Unit = {},
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalAppColors.current
     val context = LocalContext.current
 
-    BackHandler(onBack = onBack)
+    BackHandler(enabled = !uiState.isDeletingWorkspace, onBack = onBack)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            onDismissStatusMessage()
+        }
+    }
 
     var workspaceToRename by remember { mutableStateOf<Workspace?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -111,13 +123,75 @@ fun WorkspacesScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (uiState.isDeletingWorkspace) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.cardBackground)
+                        .border(1.dp, colors.divider, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = uiState.deletingWorkspaceMessage ?: "جارٍ حذف المجلد وتنظيف الفهرس...",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textPrimary
+                    )
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = colors.controlActiveBackground,
+                        trackColor = colors.divider
+                    )
+                }
+            } else if (!uiState.workspaceStatusMessage.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(colors.cardBackground)
+                        .border(1.dp, colors.divider, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.CheckCircle,
+                        contentDescription = null,
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(19.dp)
+                    )
+                    Text(
+                        text = uiState.workspaceStatusMessage,
+                        fontSize = 13.sp,
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = onDismissStatusMessage,
+                        modifier = Modifier.size(26.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "إغلاق",
+                            tint = colors.textSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
             AppSectionCard {
                 // Fixed option: "جميع المجلدات"
                 item {
                     AppSelectableRow(
                         title = "جميع المجلدات",
                         selected = uiState.activeWorkspace == null,
-                        onClick = { onSelectWorkspace(null) }
+                        onClick = { if (!uiState.isDeletingWorkspace) onSelectWorkspace(null) }
                     )
                 }
 
@@ -127,6 +201,7 @@ fun WorkspacesScreen(
                         WorkspaceRowItem(
                             workspace = ws,
                             isSelected = uiState.activeWorkspace?.id == ws.id,
+                            enabled = !uiState.isDeletingWorkspace,
                             onSelect = { onSelectWorkspace(ws.id) },
                             onRenameClick = {
                                 workspaceToRename = ws
@@ -149,6 +224,7 @@ fun WorkspacesScreen(
         ) {
             AppPrimaryButton(
                 text = "إضافة مجلد",
+                enabled = !uiState.isDeletingWorkspace,
                 onClick = {
                     val licenseManager = LicenseManager.getInstance(context)
                     val lockManager = AppLockManager.getInstance(context)
@@ -288,6 +364,7 @@ fun WorkspacesScreen(
 private fun WorkspaceRowItem(
     workspace: Workspace,
     isSelected: Boolean,
+    enabled: Boolean = true,
     onSelect: () -> Unit,
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit,
@@ -299,7 +376,7 @@ private fun WorkspaceRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect)
+            .clickable(enabled = enabled, onClick = onSelect)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween

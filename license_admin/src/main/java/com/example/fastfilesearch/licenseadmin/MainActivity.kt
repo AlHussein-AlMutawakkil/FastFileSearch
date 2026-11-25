@@ -33,11 +33,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
+import com.example.fastfilesearch.licenseadmin.history.LicenseRenewalDraft
 import com.example.fastfilesearch.licenseadmin.security.AdminLockManager
 import com.example.fastfilesearch.licenseadmin.sync.LicenseLogSyncManager
 import com.example.fastfilesearch.licenseadmin.ui.components.AppPrimaryButton
 import com.example.fastfilesearch.licenseadmin.ui.screens.AdminSettingsScreen
 import com.example.fastfilesearch.licenseadmin.ui.screens.GeneratorScreen
+import com.example.fastfilesearch.licenseadmin.ui.screens.HistoryDetailScreen
 import com.example.fastfilesearch.licenseadmin.ui.screens.HistoryScreen
 import com.example.fastfilesearch.licenseadmin.ui.theme.LocalAdminColors
 import com.example.fastfilesearch.licenseadmin.ui.theme.ProvideAdminTheme
@@ -45,6 +48,7 @@ import com.example.fastfilesearch.licenseadmin.ui.theme.ProvideAdminTheme
 enum class AdminScreen {
     GENERATOR,
     HISTORY,
+    HISTORY_DETAIL,
     SETTINGS
 }
 
@@ -60,6 +64,8 @@ class MainActivity : FragmentActivity() {
 
             ProvideAdminTheme(isDark = isDark) {
                 var currentScreen by remember { mutableStateOf(AdminScreen.GENERATOR) }
+                var selectedHistoryItem by remember { mutableStateOf<IssuedLicenseItem?>(null) }
+                var renewalDraft by remember { mutableStateOf<LicenseRenewalDraft?>(null) }
                 var isLocked by remember { mutableStateOf(AdminLockManager.isLockEnabled(this@MainActivity)) }
 
                 fun requestUnlock() {
@@ -90,20 +96,52 @@ class MainActivity : FragmentActivity() {
                     AdminLockScreen(onUnlockClick = { requestUnlock() })
                 } else {
                     BackHandler(enabled = currentScreen != AdminScreen.GENERATOR) {
-                        currentScreen = AdminScreen.GENERATOR
+                        currentScreen = when (currentScreen) {
+                            AdminScreen.HISTORY_DETAIL -> AdminScreen.HISTORY
+                            else -> AdminScreen.GENERATOR
+                        }
                     }
 
                     when (currentScreen) {
                         AdminScreen.GENERATOR -> {
                             GeneratorScreen(
                                 onNavigateToHistory = { currentScreen = AdminScreen.HISTORY },
-                                onNavigateToSettings = { currentScreen = AdminScreen.SETTINGS }
+                                onNavigateToSettings = { currentScreen = AdminScreen.SETTINGS },
+                                renewalDraft = renewalDraft,
+                                onConsumeRenewalDraft = { renewalDraft = null }
                             )
                         }
                         AdminScreen.HISTORY -> {
                             HistoryScreen(
-                                onBack = { currentScreen = AdminScreen.GENERATOR }
+                                onBack = { currentScreen = AdminScreen.GENERATOR },
+                                onOpenDetail = { item ->
+                                    selectedHistoryItem = item
+                                    currentScreen = AdminScreen.HISTORY_DETAIL
+                                },
+                                onRenew = { item ->
+                                    renewalDraft = LicenseRenewalDraft(item = item)
+                                    currentScreen = AdminScreen.GENERATOR
+                                }
                             )
+                        }
+                        AdminScreen.HISTORY_DETAIL -> {
+                            val detailItem = selectedHistoryItem
+                            if (detailItem != null) {
+                                HistoryDetailScreen(
+                                    item = detailItem,
+                                    onBack = { currentScreen = AdminScreen.HISTORY },
+                                    onRenew = { item ->
+                                        renewalDraft = LicenseRenewalDraft(item = item)
+                                        currentScreen = AdminScreen.GENERATOR
+                                    },
+                                    onDeleted = {
+                                        selectedHistoryItem = null
+                                        currentScreen = AdminScreen.HISTORY
+                                    }
+                                )
+                            } else {
+                                currentScreen = AdminScreen.HISTORY
+                            }
                         }
                         AdminScreen.SETTINGS -> {
                             AdminSettingsScreen(

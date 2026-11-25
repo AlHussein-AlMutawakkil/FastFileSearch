@@ -18,7 +18,13 @@ data class IssuedLicenseItem(
     val model: String = "",
     val osVersion: String = "",
     val abi: String = "",
-    val appVersion: String = ""
+    val appVersion: String = "",
+    val clientDeviceId: String = ""
+)
+
+data class LicenseRenewalDraft(
+    val requestId: Long = System.nanoTime(),
+    val item: IssuedLicenseItem
 )
 
 object LicenseHistoryManager {
@@ -90,6 +96,7 @@ object LicenseHistoryManager {
             if (item.osVersion.isNotBlank()) sb.append(",\"os\":\"").append(escape(item.osVersion)).append("\"")
             if (item.abi.isNotBlank()) sb.append(",\"abi\":\"").append(escape(item.abi)).append("\"")
             if (item.appVersion.isNotBlank()) sb.append(",\"v\":\"").append(escape(item.appVersion)).append("\"")
+            if (item.clientDeviceId.isNotBlank()) sb.append(",\"cdid\":\"").append(escape(item.clientDeviceId)).append("\"")
             sb.append("}")
             if (index < list.size - 1) sb.append(",")
         }
@@ -135,6 +142,7 @@ object LicenseHistoryManager {
             val osVersion = getStr("os")
             val abi = getStr("abi")
             val appVersion = getStr("v")
+            val clientDeviceId = getStr("cdid")
 
             if (code.isNotBlank()) {
                 result.add(
@@ -153,7 +161,8 @@ object LicenseHistoryManager {
                         model = model,
                         osVersion = osVersion,
                         abi = abi,
-                        appVersion = appVersion
+                        appVersion = appVersion,
+                        clientDeviceId = clientDeviceId
                     )
                 )
             }

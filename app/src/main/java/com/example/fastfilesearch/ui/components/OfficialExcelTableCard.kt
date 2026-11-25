@@ -45,6 +45,7 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.AlertDialog
@@ -84,8 +85,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.ui.FileTypeHelper
 import com.example.fastfilesearch.ui.TableCellHelper
 import com.example.fastfilesearch.ui.TableLayoutCalculator
@@ -173,6 +176,10 @@ fun OfficialExcelTableCard(
     selectionState: SelectionState = SelectionState(),
     onToggleRowSelection: ((SelectedRowData) -> Unit)? = null,
     onToggleCellSelection: ((SelectedCellData) -> Unit)? = null,
+    onSelectFileRows: ((List<SelectedRowData>) -> Unit)? = null,
+    onExportFileResults: ((List<SearchResult>, Boolean) -> Unit)? = null,
+    fileRecord: IndexedFileRecord? = null,
+    workspaceName: String? = null,
     searchFilter: SearchFilter = SearchFilter(),
     modifier: Modifier = Modifier
 ) {
@@ -215,10 +222,33 @@ fun OfficialExcelTableCard(
 
     var selectedCellInfo by remember { mutableStateOf<CellDetailDialogInfo?>(null) }
     var isCardExpanded by remember { mutableStateOf(true) }
+    var showHeaderMenu by remember { mutableStateOf(false) }
+    var showFileDetailsDialog by remember { mutableStateOf(false) }
+    var showExportChoiceDialog by remember { mutableStateOf(false) }
     val arrowRotation by animateFloatAsState(
         targetValue = if (isCardExpanded) 0f else 180f,
         label = "cardExpandArrow"
     )
+
+    if (showFileDetailsDialog) {
+        FileDetailsDialog(
+            fileName = group.fileName,
+            matchesCount = group.results.size,
+            fileRecord = fileRecord,
+            workspaceName = workspaceName,
+            onOpenFile = onOpenFile,
+            onDismissRequest = { showFileDetailsDialog = false }
+        )
+    }
+
+    if (showExportChoiceDialog) {
+        FileExportChoiceDialog(
+            fileName = group.fileName,
+            onDismissRequest = { showExportChoiceDialog = false },
+            onSaveToDevice = { onExportFileResults?.invoke(group.results, true) },
+            onShareFile = { onExportFileResults?.invoke(group.results, false) }
+        )
+    }
 
     // Unified Dialog showing full cell content on click - matching AppDesignTokens
     selectedCellInfo?.let { info ->
@@ -241,58 +271,74 @@ fun OfficialExcelTableCard(
             .background(colors.tableBg)
     ) {
         // 1. Top Bar: Calm file-specific tint, icon, file name, matches count, and collapse/expand arrow
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(topBarBg)
-                .clickable { isCardExpanded = !isCardExpanded }
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = visual.icon,
-                contentDescription = visual.typeName,
-                tint = visual.color,
-                modifier = Modifier.size(24.dp)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
-                text = group.fileName,
-                fontWeight = FontWeight.Bold,
-                fontSize = 15.sp,
-                color = topBarTextColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-
-            // Matches Count Badge (numbers only, in place of open button)
-            Box(
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
                 modifier = Modifier
-                    .clip(CircleShape)
-                    .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .background(topBarBg)
+                    .combinedClickable(
+                        onClick = { isCardExpanded = !isCardExpanded },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showHeaderMenu = true
+                        }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    imageVector = visual.icon,
+                    contentDescription = visual.typeName,
+                    tint = visual.color,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
                 Text(
-                    text = "${group.results.size}",
-                    color = if (isDark) Color(0xFFE4E7EB) else visual.color,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    text = group.fileName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = topBarTextColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+
+                // Matches Count Badge (numbers only, in place of open button)
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(visual.color.copy(alpha = if (isDark) 0.22f else 0.16f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "${group.results.size}",
+                        color = if (isDark) Color(0xFFE4E7EB) else visual.color,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Icon(
+                    imageVector = Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
+                    tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
+                    modifier = Modifier
+                        .size(19.dp)
+                        .rotate(arrowRotation)
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
-                contentDescription = if (isCardExpanded) "طيّ البطاقة" else "فتح البطاقة",
-                tint = if (isDark) Color(0xFF8E8E93) else Color(0xFF86868B),
-                modifier = Modifier
-                    .size(19.dp)
-                    .rotate(arrowRotation)
+            FileHeaderActionMenu(
+                expanded = showHeaderMenu,
+                onDismissRequest = { showHeaderMenu = false },
+                onOpenFile = onOpenFile,
+                onExportToExcel = { showExportChoiceDialog = true },
+                onShowDetails = { showFileDetailsDialog = true }
             )
         }
 
@@ -457,11 +503,43 @@ fun OfficialExcelTableCard(
                                                     "صف $rNum: " + formatRowText(cells, sheetHeaders, vertical = false)
                                                 }
                                             }
-                                            clipboardManager.setText(AnnotatedString(allText))
+                                            if (onCopyRow != null) {
+                                                onCopyRow(allText)
+                                            } else {
+                                                clipboardManager.setText(AnnotatedString(allText))
+                                            }
                                         },
                                         leadingIcon = {
                                             Icon(
                                                 imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = null,
+                                                tint = colors.headerTextColor,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    )
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "تحديد الكل",
+                                                color = colors.cellTextColor,
+                                                fontSize = 13.sp
+                                            )
+                                        },
+                                        onClick = {
+                                            sheetMenuExpanded = false
+                                            val fileRows = TableCellHelper.buildSelectableRowsForFile(
+                                                fileUri = group.fileUri,
+                                                fileName = group.fileName,
+                                                isDocument = false,
+                                                results = group.results
+                                            )
+                                            onSelectFileRows?.invoke(fileRows)
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Outlined.SelectAll,
                                                 contentDescription = null,
                                                 tint = colors.headerTextColor,
                                                 modifier = Modifier.size(16.dp)

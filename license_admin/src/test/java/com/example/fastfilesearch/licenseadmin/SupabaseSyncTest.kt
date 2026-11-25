@@ -2,8 +2,11 @@ package com.example.fastfilesearch.licenseadmin
 
 import com.example.fastfilesearch.licenseadmin.data.PendingUploadEntity
 import com.example.fastfilesearch.licenseadmin.engine.AdminLicenseGenerator
+import com.example.fastfilesearch.licenseadmin.history.IssuedLicenseItem
 import com.example.fastfilesearch.licenseadmin.sync.SupabaseUploadWorker
 import com.example.fastfilesearch.licenseadmin.sync.UploadAttemptOutcome
+import com.example.fastfilesearch.licenseadmin.ui.screens.HistoryStatusFilter
+import com.example.fastfilesearch.licenseadmin.ui.screens.matchesHistoryFilter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -137,5 +140,41 @@ class SupabaseSyncTest {
         assertTrue(SupabaseUploadWorker.classifyHttpStatus(409) is UploadAttemptOutcome.PermanentClientError)
         assertTrue(SupabaseUploadWorker.classifyHttpStatus(500) is UploadAttemptOutcome.TransientFailure)
         assertTrue(SupabaseUploadWorker.classifyHttpStatus(503) is UploadAttemptOutcome.TransientFailure)
+    }
+
+    @Test
+    fun testHistoryStatusFiltering() {
+        val now = 1_700_000_000L
+        val base = IssuedLicenseItem(
+            installationId = "BA-1111-2222-3333",
+            clientName = "عميل",
+            iat = now - 86_400L,
+            exp = 0L,
+            maxWorkspaces = 0,
+            excelExport = true,
+            appLock = true,
+            bgSync = true,
+            licenseCode = "BA1.p.s"
+        )
+
+        val lifetime = base.copy(exp = 0L)
+        val expiringSoon = base.copy(exp = now + 3L * 86_400L)
+        val activeLong = base.copy(exp = now + 30L * 86_400L)
+        val expired = base.copy(exp = now - 10L)
+
+        assertTrue(matchesHistoryFilter(lifetime, HistoryStatusFilter.ACTIVE, now))
+        assertFalse(matchesHistoryFilter(lifetime, HistoryStatusFilter.EXPIRING_SOON, now))
+        assertFalse(matchesHistoryFilter(lifetime, HistoryStatusFilter.EXPIRED, now))
+
+        assertTrue(matchesHistoryFilter(expiringSoon, HistoryStatusFilter.ACTIVE, now))
+        assertTrue(matchesHistoryFilter(expiringSoon, HistoryStatusFilter.EXPIRING_SOON, now))
+        assertFalse(matchesHistoryFilter(expiringSoon, HistoryStatusFilter.EXPIRED, now))
+
+        assertTrue(matchesHistoryFilter(activeLong, HistoryStatusFilter.ACTIVE, now))
+        assertFalse(matchesHistoryFilter(activeLong, HistoryStatusFilter.EXPIRING_SOON, now))
+
+        assertFalse(matchesHistoryFilter(expired, HistoryStatusFilter.ACTIVE, now))
+        assertFalse(matchesHistoryFilter(expired, HistoryStatusFilter.EXPIRING_SOON, now))
+        assertTrue(matchesHistoryFilter(expired, HistoryStatusFilter.EXPIRED, now))
     }
 }
