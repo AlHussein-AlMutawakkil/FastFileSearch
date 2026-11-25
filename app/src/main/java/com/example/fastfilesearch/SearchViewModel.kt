@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchMethod
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.model.Workspace
 import com.example.fastfilesearch.sync.SyncScheduler
@@ -42,6 +43,7 @@ data class SearchUiState(
     val verticalCopyFormat: Boolean = true,
     val expandFullCellText: Boolean = true,
     val appTheme: String = "system",
+    val defaultSearchMethod: SearchMethod = SearchMethod.CONTAINS,
     val isBackgroundSyncEnabled: Boolean = true,
     val searchFilter: SearchFilter = SearchFilter(),
     val indexedFiles: List<IndexedFileRecord> = emptyList(),
@@ -68,6 +70,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val verticalCopyPref = searchEngine.isVerticalCopyFormat()
         val expandCellPref = searchEngine.isExpandFullCellText()
         val themePref = searchEngine.getAppTheme()
+        val defaultMethodPref = searchEngine.getDefaultSearchMethod()
         val bgSyncPref = searchEngine.isBackgroundSyncEnabled()
 
         val licenseManager = LicenseManager.getInstance(application)
@@ -92,6 +95,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                 verticalCopyFormat = verticalCopyPref,
                 expandFullCellText = expandCellPref,
                 appTheme = themePref,
+                defaultSearchMethod = defaultMethodPref,
+                searchFilter = it.searchFilter.copy(method = defaultMethodPref),
                 isBackgroundSyncEnabled = bgSyncPref
             )
         }
@@ -390,6 +395,21 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(appTheme = theme) }
     }
 
+    fun onSetDefaultSearchMethod(method: SearchMethod) {
+        searchEngine.setDefaultSearchMethod(method)
+        _uiState.update {
+            it.copy(
+                defaultSearchMethod = method,
+                searchFilter = it.searchFilter.copy(method = method),
+                selectionState = it.selectionState.clear()
+            )
+        }
+        val currentQuery = _uiState.value.searchQuery
+        if (currentQuery.isNotBlank()) {
+            executeSearch(currentQuery)
+        }
+    }
+
     fun onFilterChanged(newFilter: SearchFilter) {
         _uiState.update { it.copy(searchFilter = newFilter, selectionState = it.selectionState.clear()) }
         val currentQuery = _uiState.value.searchQuery
@@ -419,7 +439,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onResetFilter() {
-        onFilterChanged(SearchFilter())
+        onFilterChanged(SearchFilter(method = _uiState.value.defaultSearchMethod))
     }
 
     fun onDismissMessage() {

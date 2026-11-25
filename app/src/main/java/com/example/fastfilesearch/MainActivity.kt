@@ -152,6 +152,7 @@ class MainActivity : FragmentActivity() {
                                 onToggleVerticalCopyFormat = { viewModel.onToggleVerticalCopyFormat(it) },
                                 onToggleExpandFullCellText = { viewModel.onToggleExpandFullCellText(it) },
                                 onSetAppTheme = { viewModel.onSetAppTheme(it) },
+                                onSetDefaultSearchMethod = { viewModel.onSetDefaultSearchMethod(it) },
                                 onToggleRowSelection = { viewModel.toggleRowSelection(it) },
                                 onToggleCellSelection = { viewModel.toggleCellSelection(it) },
                                 onSelectAllRows = { viewModel.selectAllRows(it) },

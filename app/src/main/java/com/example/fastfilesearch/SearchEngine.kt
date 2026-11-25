@@ -11,6 +11,7 @@ import com.example.fastfilesearch.database.SearchDatabaseHelper
 import com.example.fastfilesearch.model.FileSegment
 import com.example.fastfilesearch.model.IndexedFileRecord
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchMethod
 import com.example.fastfilesearch.model.SearchResult
 import com.example.fastfilesearch.model.Workspace
 import com.example.fastfilesearch.parser.FileParserDispatcher
@@ -72,6 +73,7 @@ class SearchEngine(private val context: Context) {
         private const val KEY_VERTICAL_COPY_FORMAT = "vertical_copy_format"
         private const val KEY_EXPAND_FULL_CELL_TEXT = "expand_full_cell_text"
         private const val KEY_APP_THEME = "app_theme"
+        private const val KEY_DEFAULT_SEARCH_METHOD = "default_search_method"
         private const val PARALLEL_WORKERS = 4
     }
 
@@ -246,6 +248,15 @@ class SearchEngine(private val context: Context) {
 
     fun setAppTheme(theme: String) {
         prefs.edit().putString(KEY_APP_THEME, theme).apply()
+    }
+
+    fun getDefaultSearchMethod(): SearchMethod {
+        val raw = prefs.getString(KEY_DEFAULT_SEARCH_METHOD, null)
+        return SearchMethod.fromStoredName(raw)
+    }
+
+    fun setDefaultSearchMethod(method: SearchMethod) {
+        prefs.edit().putString(KEY_DEFAULT_SEARCH_METHOD, method.name).apply()
     }
 
     // ==========================================

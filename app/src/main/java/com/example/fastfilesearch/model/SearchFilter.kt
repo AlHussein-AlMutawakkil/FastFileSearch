@@ -4,7 +4,14 @@ enum class SearchMethod(val displayName: String, val description: String) {
     CONTAINS("يحتوي على", "مطابقة النص حتى في وسط الكلمة"),
     ALL_WORDS("جميع الكلمات", "يشترط وجود جميع الكلمات في نفس السطر"),
     EXACT_PHRASE("العبارة بالضبط", "مطابقة العبارة بترتيب كلماتها نصاً"),
-    WHOLE_WORD("الكلمة بالكامل", "مطابقة الكلمة المستقلة بالكامل")
+    WHOLE_WORD("الكلمة بالكامل", "مطابقة الكلمة المستقلة بالكامل");
+
+    companion object {
+        fun fromStoredName(name: String?): SearchMethod {
+            if (name.isNullOrBlank()) return CONTAINS
+            return entries.firstOrNull { it.name == name } ?: CONTAINS
+        }
+    }
 }
 
 data class FilteredFileType(
@@ -41,9 +48,13 @@ data class SearchFilter(
     val selectedWorkspaceIds: Set<String> = emptySet()
 ) {
     val isFilterActive: Boolean
-        get() = method != SearchMethod.CONTAINS ||
+        get() = isFilterActive(SearchMethod.CONTAINS)
+
+    fun isFilterActive(defaultMethod: SearchMethod): Boolean {
+        return method != defaultMethod ||
                 !ignoreDiacritics ||
                 selectedExtensions.isNotEmpty() ||
                 selectedFileUris.isNotEmpty() ||
                 selectedWorkspaceIds.isNotEmpty()
+    }
 }

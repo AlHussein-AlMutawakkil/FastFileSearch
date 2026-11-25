@@ -632,13 +632,13 @@ fun FilterSheet(
                 ) {
                     OutlinedButton(
                         onClick = {
-                            tempMethod = SearchMethod.CONTAINS
+                            tempMethod = uiState.defaultSearchMethod
                             tempIgnoreDiacritics = true
                             tempSelectedWorkspaceIds = emptySet()
                             tempSelectedExtensions = emptySet()
                             tempSelectedFileUris = emptySet()
                             fileSearchQuery = ""
-                            onApply(SearchFilter())
+                            onApply(SearchFilter(method = uiState.defaultSearchMethod))
                         },
                         shape = RoundedCornerShape(AppDesignTokens.ButtonCornerRadius),
                         colors = ButtonDefaults.outlinedButtonColors(

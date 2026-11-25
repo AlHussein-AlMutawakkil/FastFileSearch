@@ -97,6 +97,7 @@ import com.example.fastfilesearch.licensing.LicenseManager
 import com.example.fastfilesearch.licensing.LicenseStatus
 import com.example.fastfilesearch.model.RecordDetailData
 import com.example.fastfilesearch.model.SearchFilter
+import com.example.fastfilesearch.model.SearchMethod
 import com.example.fastfilesearch.security.AppLockManager
 import com.example.fastfilesearch.security.AppLockMode
 import com.example.fastfilesearch.ui.components.EmptyFolderPrompt
@@ -120,6 +121,7 @@ import com.example.fastfilesearch.ui.selection.SelectedCellData
 import com.example.fastfilesearch.ui.selection.SelectedRowData
 import com.example.fastfilesearch.ui.selection.SelectionMode
 import com.example.fastfilesearch.ui.settings.AboutScreen
+import com.example.fastfilesearch.ui.settings.DefaultSearchMethodScreen
 import com.example.fastfilesearch.ui.settings.PermissionsScreen
 import com.example.fastfilesearch.ui.settings.SettingsScreen
 import com.example.fastfilesearch.ui.settings.SupportedFormatsScreen
@@ -136,6 +138,7 @@ enum class AppDestination {
     SETTINGS,
     WORKSPACES,
     THEME_SETTINGS,
+    DEFAULT_SEARCH_METHOD,
     PERMISSIONS,
     APP_LOCK,
     SUPPORTED_FORMATS,
@@ -164,6 +167,7 @@ fun SearchScreen(
     onToggleVerticalCopyFormat: (Boolean) -> Unit = {},
     onToggleExpandFullCellText: (Boolean) -> Unit = {},
     onSetAppTheme: (String) -> Unit = {},
+    onSetDefaultSearchMethod: (SearchMethod) -> Unit = {},
     onToggleRowSelection: (SelectedRowData) -> Unit = {},
     onToggleCellSelection: (SelectedCellData) -> Unit = {},
     onSelectAllRows: (List<SelectedRowData>) -> Unit = {},
@@ -356,6 +360,7 @@ fun SearchScreen(
                         onToggleExpandFullCellText = onToggleExpandFullCellText,
                         onNavigateToWorkspaces = { currentDestination = AppDestination.WORKSPACES },
                         onToggleBackgroundSync = onToggleBackgroundSync,
+                        onNavigateToDefaultSearchMethod = { currentDestination = AppDestination.DEFAULT_SEARCH_METHOD },
                         onNavigateToTheme = { currentDestination = AppDestination.THEME_SETTINGS },
                         onNavigateToPermissions = { currentDestination = AppDestination.PERMISSIONS },
                         onNavigateToAppLock = { currentDestination = AppDestination.APP_LOCK },
@@ -407,6 +412,15 @@ fun SearchScreen(
                     ThemeSettingsScreen(
                         currentTheme = uiState.appTheme,
                         onSetTheme = onSetAppTheme,
+                        onBack = { currentDestination = AppDestination.SETTINGS }
+                    )
+                    return@CompositionLocalProvider
+                }
+
+                AppDestination.DEFAULT_SEARCH_METHOD -> {
+                    DefaultSearchMethodScreen(
+                        currentMethod = uiState.defaultSearchMethod,
+                        onSetMethod = onSetDefaultSearchMethod,
                         onBack = { currentDestination = AppDestination.SETTINGS }
                     )
                     return@CompositionLocalProvider
@@ -973,7 +987,7 @@ fun SearchScreen(
                     }
 
                     // Side Filter Icon Button (clean and unbordered)
-                    val isFilterActive = uiState.searchFilter.isFilterActive
+                    val isFilterActive = uiState.searchFilter.isFilterActive(uiState.defaultSearchMethod)
                     IconButton(
                         onClick = { showFilterSheet = true },
                         modifier = Modifier.size(44.dp)

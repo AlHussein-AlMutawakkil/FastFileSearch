@@ -31,6 +31,21 @@ class SearchFilterAndHighlighterTest {
     }
 
     @Test
+    fun testDefaultSearchMethodParsingAndFilterActiveCheck() {
+        assertEquals(SearchMethod.CONTAINS, SearchMethod.fromStoredName(null))
+        assertEquals(SearchMethod.CONTAINS, SearchMethod.fromStoredName(""))
+        assertEquals(SearchMethod.CONTAINS, SearchMethod.fromStoredName("UNKNOWN"))
+        assertEquals(SearchMethod.ALL_WORDS, SearchMethod.fromStoredName("ALL_WORDS"))
+        assertEquals(SearchMethod.EXACT_PHRASE, SearchMethod.fromStoredName("EXACT_PHRASE"))
+        assertEquals(SearchMethod.WHOLE_WORD, SearchMethod.fromStoredName("WHOLE_WORD"))
+
+        val filterUsingUserDefault = SearchFilter(method = SearchMethod.WHOLE_WORD)
+        assertFalse(filterUsingUserDefault.isFilterActive(SearchMethod.WHOLE_WORD))
+        assertTrue(filterUsingUserDefault.isFilterActive(SearchMethod.CONTAINS))
+        assertTrue(SearchFilter(method = SearchMethod.EXACT_PHRASE).isFilterActive(SearchMethod.WHOLE_WORD))
+    }
+
+    @Test
     fun testSupportedFileTypeGroups() {
         val excelGroup = SupportedFileTypeGroups.EXCEL
         assertTrue(excelGroup.extensions.contains("xlsx"))

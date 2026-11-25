@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
@@ -44,6 +45,7 @@ fun SettingsScreen(
     onToggleExpandFullCellText: (Boolean) -> Unit,
     onNavigateToWorkspaces: () -> Unit = {},
     onToggleBackgroundSync: (Boolean) -> Unit = {},
+    onNavigateToDefaultSearchMethod: () -> Unit = {},
     onNavigateToTheme: () -> Unit,
     onNavigateToPermissions: () -> Unit,
     onNavigateToAppLock: () -> Unit = {},
@@ -168,8 +170,18 @@ fun SettingsScreen(
                 }
             }
 
-            // CARD 3: المجموعة الأخيرة: المظهر، الأذونات، الصيغ المدعومة، حول التطبيق
+            // CARD 3: المجموعة الأخيرة: طريقة البحث الافتراضية، المظهر، الأذونات، الصيغ المدعومة، حول التطبيق
             AppSectionCard {
+                item {
+                    AppNavigationRow(
+                        title = "طريقة البحث الافتراضية",
+                        value = uiState.defaultSearchMethod.displayName,
+                        icon = Icons.Outlined.Search,
+                        showChevron = false,
+                        onClick = onNavigateToDefaultSearchMethod
+                    )
+                }
+
                 item {
                     AppNavigationRow(
                         title = "المظهر",
