@@ -206,4 +206,95 @@ class V2AdminCodecTest {
         assertNull(plain.installNonce)
         assertTrue(AdminLicenseGenerator.generateV2License(plain).isFailure)
     }
+
+    @Test
+    fun testParseWindowsR2AndGenerateWindowsV2LicenseAndUploadJson() {
+        val hash6 = byteArrayOf(0x21, 0x43, 0x65, 0x87.toByte(), 0xA9.toByte(), 0xCB.toByte())
+        val nonce = 0x3F4E
+        val r2 = V2LicenseCodec.encodeR2Request(
+            platform = V2LicenseCodec.PLATFORM_WINDOWS,
+            fpType = V2LicenseCodec.FP_TYPE_WIN,
+            abiCode = V2LicenseCodec.ABI_X64,
+            deviceHash6 = hash6,
+            installNonce = nonce,
+            osVersionInt = 11,
+            appVersionCompact = 50,
+            manufacturer = "Dell",
+            model = "Latitude 5430"
+        )
+
+        val parsed = AdminLicenseGenerator.parseActivationRequest(r2)
+        assertTrue(parsed.isR2Request)
+        assertEquals(V2LicenseCodec.PLATFORM_WINDOWS, parsed.platformCode)
+        assertEquals(V2LicenseCodec.FP_TYPE_WIN, parsed.fpType)
+        assertEquals("WIN-21436587a9cb", parsed.clientDeviceId)
+        assertEquals(nonce, parsed.installNonce)
+
+        val dev = parsed.deviceInfo
+        assertNotNull(dev)
+        dev!!
+        assertEquals("windows", dev.platform)
+        assertEquals("Dell", dev.manufacturer)
+        assertEquals("LATITUDE 5", dev.model)
+        assertEquals("Windows 11", dev.osVersion)
+        assertEquals("x86_64", dev.abi)
+        assertEquals("5.0.0", dev.appVersion)
+
+        val nowSeconds = 1795651200L
+        val shortCode = AdminLicenseGenerator.generateV2License(
+            parsedRequest = parsed,
+            durationDays = 365L,
+            maxWorkspaces = 5,
+            excelExport = true,
+            appLock = false,
+            allowAccess = true,
+            planType = "yearly",
+            nowSeconds = nowSeconds
+        ).getOrThrow()
+
+        val verified = V2LicenseCodec.decodeAndVerifyShortLicenseCode(
+            rawCode = shortCode,
+            expectedFpType = V2LicenseCodec.FP_TYPE_WIN,
+            expectedDeviceHash6 = hash6,
+            expectedInstallNonce = nonce
+        )!!
+        assertEquals(V2LicenseCodec.PLATFORM_WINDOWS, verified.platform)
+        assertEquals("yearly", verified.planTypeName)
+        assertEquals(5, verified.maxFolders)
+        assertTrue(verified.allowExcel)
+        assertTrue(verified.allowAccess)
+
+        val payload = AdminLicenseGenerator.parsePayload(
+            licenseCode = shortCode,
+            installationId = parsed.installationId,
+            clientName = "",
+            issuedAt = nowSeconds
+        )
+        val entity = PendingUploadEntity(
+            issuedAt = Instant.ofEpochSecond(payload.iat).toString(),
+            issuerId = "issuer-01",
+            issuerDevice = "Admin PC",
+            customerName = payload.n,
+            installationId = payload.id,
+            clientDeviceId = parsed.clientDeviceId,
+            clientManufacturer = dev.manufacturer,
+            clientModel = dev.model,
+            clientOs = dev.osVersion,
+            clientAbi = dev.abi,
+            clientAppVersion = dev.appVersion,
+            planType = "yearly",
+            durationDays = 365,
+            expiresAt = Instant.ofEpochSecond(payload.exp).toString(),
+            maxFolders = payload.mw,
+            allowExcel = payload.ex == 1,
+            allowAppLock = payload.lk == 1,
+            licenseCode = shortCode
+        )
+
+        val json = SupabaseUploadWorker.toSupabaseJson(entity)
+        assertTrue(json.contains("\"client_device_id\":\"WIN-21436587a9cb\""))
+        assertTrue(json.contains("\"client_os\":\"Windows 11\""))
+        assertTrue(json.contains("\"client_manufacturer\":\"Dell\""))
+        assertTrue(json.contains("\"license_code\":\"$shortCode\""))
+    }
 }

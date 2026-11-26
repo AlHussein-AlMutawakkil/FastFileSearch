@@ -8,10 +8,14 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
+composeMultiplatform = "1.9.3"
 fastexcel = "0.18.4"
 jackcess = "4.0.8"
 jxl = "2.6.12"
 pdfbox = "2.0.27.0"
+pdfboxJvm = "2.0.32"
+poi = "5.2.5"
+sqliteJdbc = "3.47.1.0"
 documentfile = "1.0.1"
 work = "2.10.0"
 biometric = "1.1.0"
@@ -47,9 +51,15 @@ fastexcel-reader = { group = "org.dhatim", name = "fastexcel-reader", version.re
 jackcess = { group = "com.healthmarketscience.jackcess", name = "jackcess", version.ref = "jackcess" }
 jxl = { group = "net.sourceforge.jexcelapi", name = "jxl", version.ref = "jxl" }
 pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfbox" }
+pdfbox-jvm = { group = "org.apache.pdfbox", name = "pdfbox", version.ref = "pdfboxJvm" }
+poi-ooxml = { group = "org.apache.poi", name = "poi-ooxml", version.ref = "poi" }
+poi-scratchpad = { group = "org.apache.poi", name = "poi-scratchpad", version.ref = "poi" }
+sqlite-jdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqliteJdbc" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 

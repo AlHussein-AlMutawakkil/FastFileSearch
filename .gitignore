@@ -30,3 +30,6 @@ keystore.properties
 
 # مفاتيح وبيانات Supabase السرية
 supabase.properties
+
+# Desktop build outputs
+/desktop/build/

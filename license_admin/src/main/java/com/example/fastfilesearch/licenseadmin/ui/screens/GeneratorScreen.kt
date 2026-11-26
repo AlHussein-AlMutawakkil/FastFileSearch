@@ -401,10 +401,16 @@ fun GeneratorScreen(
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                     if (dev.manufacturer.isNotBlank()) {
-                                        DeviceDetailRow(title = "نوع الهاتف", value = dev.manufacturer)
+                                        DeviceDetailRow(
+                                            title = if (dev.platform == "windows") "نوع الجهاز" else "نوع الهاتف",
+                                            value = dev.manufacturer
+                                        )
                                     }
                                     if (dev.model.isNotBlank()) {
-                                        DeviceDetailRow(title = "موديل الهاتف", value = dev.model)
+                                        DeviceDetailRow(
+                                            title = if (dev.platform == "windows") "موديل الجهاز" else "موديل الهاتف",
+                                            value = dev.model
+                                        )
                                     }
                                     if (dev.osVersion.isNotBlank()) {
                                         DeviceDetailRow(title = "إصدار النظام", value = dev.osVersion)
