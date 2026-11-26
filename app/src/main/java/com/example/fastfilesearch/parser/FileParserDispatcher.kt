@@ -8,7 +8,7 @@ import java.util.Locale
 object FileParserDispatcher {
 
     private val SUPPORTED_EXTENSIONS = setOf(
-        "xlsx", "xls", "docx", "pdf", "txt", "csv", "json", "md", "log"
+        "xlsx", "xls", "mdb", "accdb", "docx", "pdf", "txt", "csv", "json", "md", "log"
     )
 
     fun isSupportedFile(fileName: String): Boolean {
@@ -42,6 +42,7 @@ object FileParserDispatcher {
         when (ext) {
             "xlsx" -> ExcelXlsxParser.parse(context, inputStream, fileUri, fileName, onHeaderFound, onSegmentFound)
             "xls" -> ExcelXlsParser.parse(inputStream, fileUri, fileName, onHeaderFound, onSegmentFound)
+            "mdb", "accdb" -> AccessDatabaseParser.parse(context, inputStream, fileUri, fileName, onHeaderFound, onSegmentFound)
             "docx" -> DocxParser.parse(inputStream, fileUri, fileName, onSegmentFound)
             "pdf" -> PdfParser.parse(context, inputStream, fileUri, fileName, onSegmentFound)
             "txt", "csv", "json", "md", "log" -> TextFileParser.parse(inputStream, fileUri, fileName, onSegmentFound)

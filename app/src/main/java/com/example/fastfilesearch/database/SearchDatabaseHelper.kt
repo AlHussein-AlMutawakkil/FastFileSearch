@@ -553,6 +553,11 @@ class SearchDatabaseHelper(context: Context) : SQLiteOpenHelper(
             sheet = parts.getOrNull(0)?.substringAfter("ورقة:")?.trim()
             val rowPart = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim()
             row = rowPart?.toIntOrNull()
+        } else if (location.contains("جدول:")) {
+            val parts = location.split("،")
+            sheet = parts.getOrNull(0)?.substringAfter("جدول:")?.trim()
+            val rowPart = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim()
+            row = rowPart?.toIntOrNull()
         } else if (location.contains("سطر")) {
             row = location.replace("سطر", "").replace(":", "").trim().toIntOrNull()
         } else if (location.contains("فقرة")) {

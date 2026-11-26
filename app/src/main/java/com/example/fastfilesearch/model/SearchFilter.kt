@@ -22,6 +22,7 @@ data class FilteredFileType(
 
 object SupportedFileTypeGroups {
     val EXCEL = FilteredFileType("excel", "Excel", setOf("xlsx", "xls"))
+    val ACCESS = FilteredFileType("access", "قواعد Access", setOf("mdb", "accdb"))
     val WORD = FilteredFileType("word", "Word", setOf("docx", "doc"))
     val PDF = FilteredFileType("pdf", "PDF", setOf("pdf"))
     val TEXT = FilteredFileType("text", "نصوص", setOf("txt", "log"))
@@ -31,6 +32,7 @@ object SupportedFileTypeGroups {
 
     val ALL_GROUPS = listOf(
         EXCEL,
+        ACCESS,
         WORD,
         PDF,
         TEXT,

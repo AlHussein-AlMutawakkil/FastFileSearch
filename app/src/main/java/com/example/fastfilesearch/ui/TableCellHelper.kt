@@ -21,6 +21,10 @@ object TableCellHelper {
             val parts = location.split("،")
             sheet = parts.getOrNull(0)?.substringAfter("ورقة:")?.trim() ?: "ورقة 1"
             row = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim() ?: "1"
+        } else if (location.contains("جدول:")) {
+            val parts = location.split("،")
+            sheet = parts.getOrNull(0)?.substringAfter("جدول:")?.trim() ?: "جدول 1"
+            row = parts.getOrNull(1)?.replace("صف:", "")?.replace("صف", "")?.trim() ?: "1"
         } else if (location.contains("سطر")) {
             sheet = "بيانات جدولية"
             row = location.replace("سطر", "").replace(":", "").trim()
@@ -131,7 +135,7 @@ object TableCellHelper {
      */
     fun isTabular(fileName: String, content: String): Boolean {
         val ext = FileParserDispatcher.getExtension(fileName)
-        if (ext in listOf("xlsx", "xls", "csv")) return true
+        if (ext in listOf("xlsx", "xls", "csv", "mdb", "accdb")) return true
         if (content.contains("\t") || content.contains(" | ")) return true
         if (content.count { it == ',' } >= 2) return true
         if (content.count { it == ';' } >= 2) return true

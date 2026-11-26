@@ -28,12 +28,9 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.TableRows
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.fastfilesearch.SearchUiState
 import com.example.fastfilesearch.ui.designsystem.AppNavigationRow
 import com.example.fastfilesearch.ui.designsystem.AppSectionCard
@@ -100,12 +97,11 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // SECTION 1: المجلدات والفهرسة
-            SettingsSectionLabel(title = "المجلدات والفهرسة")
+            // Card 1: المجلدات والفهرسة
             AppSectionCard {
                 item {
                     AppNavigationRow(
@@ -137,10 +133,7 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // SECTION 2: إعدادات البحث
-            SettingsSectionLabel(title = "البحث")
+            // Card 2: إعدادات البحث
             AppSectionCard {
                 item {
                     AppNavigationRow(
@@ -154,8 +147,8 @@ fun SettingsScreen(
 
                 item {
                     AppToggleRow(
-                        title = "حفظ سجل البحث السريع",
-                        subtitle = "حفظ آخر كلمات البحث للوصول السريع محلياً دون اتصال",
+                        title = "حفظ سجل البحث",
+                        subtitle = "حفظ آخر كلمات البحث للوصول السريع",
                         checked = uiState.isSearchHistoryEnabled,
                         onCheckedChange = onToggleSearchHistoryEnabled,
                         icon = Icons.Outlined.History
@@ -165,7 +158,7 @@ fun SettingsScreen(
                 if (uiState.isSearchHistoryEnabled && uiState.searchHistory.isNotEmpty()) {
                     item {
                         AppNavigationRow(
-                            title = "مسح سجل البحث السريع",
+                            title = "مسح سجل البحث",
                             value = "${uiState.searchHistory.size} عنصر",
                             icon = Icons.Outlined.DeleteSweep,
                             showChevron = false,
@@ -175,10 +168,7 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // SECTION 3: عرض الجداول والنتائج
-            SettingsSectionLabel(title = "الجداول والنتائج")
+            // Card 3: عرض الجداول والنتائج
             AppSectionCard {
                 item {
                     AppToggleRow(
@@ -221,10 +211,7 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // SECTION 4: التخصيص والأمان والنظام
-            SettingsSectionLabel(title = "التخصيص والأمان والنظام")
+            // Card 4: المظهر والأمان والترخيص
             AppSectionCard {
                 item {
                     AppNavigationRow(
@@ -264,7 +251,10 @@ fun SettingsScreen(
                         onClick = onNavigateToLicense
                     )
                 }
+            }
 
+            // Card 5: الصيغ المدعومة وحول التطبيق (منفصلة)
+            AppSectionCard {
                 item {
                     AppNavigationRow(
                         title = "الصيغ المدعومة",
@@ -287,16 +277,4 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
     }
-}
-
-@Composable
-private fun SettingsSectionLabel(title: String) {
-    val colors = LocalAppColors.current
-    Text(
-        text = title,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Medium,
-        color = colors.textSecondary,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    )
 }

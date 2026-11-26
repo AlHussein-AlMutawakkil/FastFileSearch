@@ -64,6 +64,7 @@ android {
             excludes += "/META-INF/DEPENDENCIES"
             excludes += "/META-INF/LICENSE*"
             excludes += "/META-INF/NOTICE*"
+            excludes += "/META-INF/INDEX.LIST"
         }
     }
     buildFeatures {
@@ -91,6 +92,7 @@ dependencies {
     implementation(libs.jxl)
     implementation(libs.pdfbox.android)
     implementation("org.apache.poi:poi-ooxml:5.2.5")
+    implementation(libs.jackcess)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

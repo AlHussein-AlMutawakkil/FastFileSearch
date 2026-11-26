@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -27,6 +28,11 @@ object FileTypeHelper {
                 icon = Icons.Default.TableChart,
                 color = Color(0xFF1E7E34), // Excel Green
                 typeName = if (ext == "xlsx") "Excel (XLSX)" else "Excel (XLS)"
+            )
+            "mdb", "accdb" -> FileTypeVisual(
+                icon = Icons.Default.Storage,
+                color = Color(0xFFA4373A), // Microsoft Access Maroon
+                typeName = if (ext == "accdb") "قاعدة Access (ACCDB)" else "قاعدة Access (MDB)"
             )
             "docx" -> FileTypeVisual(
                 icon = Icons.Default.Description,
@@ -69,6 +75,7 @@ object FileTypeHelper {
     fun getVisualForGroup(group: FilteredFileType): FileTypeVisual {
         return when (group.id) {
             "excel" -> FileTypeVisual(Icons.Default.TableChart, Color(0xFF1E7E34), "Excel")
+            "access" -> FileTypeVisual(Icons.Default.Storage, Color(0xFFA4373A), "قواعد Access")
             "word" -> FileTypeVisual(Icons.Default.Description, Color(0xFF185ABD), "Word")
             "pdf" -> FileTypeVisual(Icons.Default.PictureAsPdf, Color(0xFFD32F2F), "PDF")
             "text" -> FileTypeVisual(Icons.AutoMirrored.Filled.Article, Color(0xFF455A64), "نصوص")

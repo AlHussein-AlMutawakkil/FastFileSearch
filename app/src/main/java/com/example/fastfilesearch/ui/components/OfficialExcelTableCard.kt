@@ -181,6 +181,8 @@ fun OfficialExcelTableCard(
     fileRecord: IndexedFileRecord? = null,
     workspaceName: String? = null,
     searchFilter: SearchFilter = SearchFilter(),
+    isExpanded: Boolean? = null,
+    onToggleExpanded: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -221,7 +223,15 @@ fun OfficialExcelTableCard(
     }
 
     var selectedCellInfo by remember { mutableStateOf<CellDetailDialogInfo?>(null) }
-    var isCardExpanded by remember { mutableStateOf(true) }
+    var localExpanded by remember { mutableStateOf(true) }
+    val isCardExpanded = isExpanded ?: localExpanded
+    val toggleExpanded: () -> Unit = {
+        if (onToggleExpanded != null) {
+            onToggleExpanded()
+        } else {
+            localExpanded = !localExpanded
+        }
+    }
     var showHeaderMenu by remember { mutableStateOf(false) }
     var showFileDetailsDialog by remember { mutableStateOf(false) }
     var showExportChoiceDialog by remember { mutableStateOf(false) }
@@ -277,7 +287,7 @@ fun OfficialExcelTableCard(
                     .fillMaxWidth()
                     .background(topBarBg)
                     .combinedClickable(
-                        onClick = { isCardExpanded = !isCardExpanded },
+                        onClick = toggleExpanded,
                         onLongClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             showHeaderMenu = true

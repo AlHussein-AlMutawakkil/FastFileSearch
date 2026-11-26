@@ -35,6 +35,14 @@
 -keep class jxl.** { *; }
 -dontwarn jxl.**
 
+# Jackcess (Microsoft Access .mdb / .accdb)
+-keep class com.healthmarketscience.jackcess.** { *; }
+-dontwarn com.healthmarketscience.jackcess.**
+-keep class org.apache.commons.logging.** { *; }
+-dontwarn org.apache.commons.logging.**
+-keep class org.apache.commons.lang3.** { *; }
+-dontwarn org.apache.commons.lang3.**
+
 # Device Info & Hardware Fingerprint (MediaDrm)
 -keep class com.example.fastfilesearch.util.ClientDeviceIdProvider { *; }
 -keep class com.example.fastfilesearch.util.DeviceInfoHelper { *; }

@@ -50,11 +50,17 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material.icons.outlined.UnfoldLess
+import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -85,6 +91,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -208,6 +215,7 @@ fun SearchScreen(
     var showExportAllMenu by remember { mutableStateOf(false) }
     var pendingWorkbookToSave by remember { mutableStateOf<org.apache.poi.xssf.usermodel.XSSFWorkbook?>(null) }
     var pendingExportItemCount by remember { mutableStateOf(0) }
+    var collapsedFileUris by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -313,6 +321,7 @@ fun SearchScreen(
     }
 
     LaunchedEffect(uiState.searchQuery) {
+        collapsedFileUris = emptySet()
         if (uiState.searchQuery.isNotBlank()) {
             currentDestination = AppDestination.SEARCH
             activeRecordDetail = null
@@ -1187,81 +1196,116 @@ fun SearchScreen(
                             )
 
                             if (resultCount > 0) {
-                                Box {
+                                val visibleFileUris = remember(groupedResults) {
+                                    groupedResults.map { it.fileUri }
+                                }
+                                val anyExpanded = FileExpansionStateHelper.hasAnyExpanded(
+                                    visibleFileUris = visibleFileUris,
+                                    collapsedFileUris = collapsedFileUris
+                                )
+                                val collapseExpandDescription = if (anyExpanded) {
+                                    "طي جميع الملفات"
+                                } else {
+                                    "توسيع جميع الملفات"
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
                                     IconButton(
                                         onClick = {
-                                            if (!licenseManager.canExportExcel()) {
-                                                coroutineScope.launch {
-                                                    snackbarHostState.showSnackbar("ميزة تصدير Excel غير مشمولة في الترخيص الحالي")
-                                                }
-                                            } else {
-                                                showExportAllMenu = true
-                                            }
+                                            collapsedFileUris = FileExpansionStateHelper.toggleAll(
+                                                visibleFileUris = visibleFileUris,
+                                                collapsedFileUris = collapsedFileUris
+                                            )
                                         },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Outlined.FileDownload,
-                                            contentDescription = "تصدير جميع النتائج كملف Excel",
+                                            imageVector = if (anyExpanded) Icons.Outlined.UnfoldLess else Icons.Outlined.UnfoldMore,
+                                            contentDescription = collapseExpandDescription,
                                             tint = colors.textSecondary,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
-                                    DropdownMenu(
-                                        expanded = showExportAllMenu,
-                                        onDismissRequest = { showExportAllMenu = false },
-                                        modifier = Modifier
-                                            .background(colors.cardBackground)
-                                            .border(0.5.dp, colors.divider, RoundedCornerShape(8.dp))
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = "مشاركة كملف Excel (.xlsx)",
-                                                    color = colors.textPrimary,
-                                                    fontSize = 14.sp
-                                                )
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Share,
-                                                    contentDescription = null,
-                                                    tint = colors.textPrimary,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            },
+
+                                    Box {
+                                        IconButton(
                                             onClick = {
-                                                showExportAllMenu = false
-                                                val resultsSnapshot = uiState.searchResults
-                                                startExcelShare(itemCount = resultsSnapshot.size) {
-                                                    ExcelExporter.exportAllResultsToCache(context, resultsSnapshot)
+                                                if (!licenseManager.canExportExcel()) {
+                                                    coroutineScope.launch {
+                                                        snackbarHostState.showSnackbar("ميزة تصدير Excel غير مشمولة في الترخيص الحالي")
+                                                    }
+                                                } else {
+                                                    showExportAllMenu = true
                                                 }
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = "حفظ كملف Excel (.xlsx)",
-                                                    color = colors.textPrimary,
-                                                    fontSize = 14.sp
-                                                )
                                             },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.FileDownload,
-                                                    contentDescription = null,
-                                                    tint = colors.textPrimary,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            },
-                                            onClick = {
-                                                showExportAllMenu = false
-                                                val resultsSnapshot = uiState.searchResults
-                                                startExcelSave(itemCount = resultsSnapshot.size) {
-                                                    ExcelExporter.buildWorkbookForAllResults(resultsSnapshot)
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.FileDownload,
+                                                contentDescription = "تصدير جميع النتائج كملف Excel",
+                                                tint = colors.textSecondary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = showExportAllMenu,
+                                            onDismissRequest = { showExportAllMenu = false },
+                                            modifier = Modifier
+                                                .background(colors.cardBackground)
+                                                .border(0.5.dp, colors.divider, RoundedCornerShape(8.dp))
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = "مشاركة كملف Excel (.xlsx)",
+                                                        color = colors.textPrimary,
+                                                        fontSize = 14.sp
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.Share,
+                                                        contentDescription = null,
+                                                        tint = colors.textPrimary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showExportAllMenu = false
+                                                    val resultsSnapshot = uiState.searchResults
+                                                    startExcelShare(itemCount = resultsSnapshot.size) {
+                                                        ExcelExporter.exportAllResultsToCache(context, resultsSnapshot)
+                                                    }
                                                 }
-                                            }
-                                        )
+                                            )
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = "حفظ كملف Excel (.xlsx)",
+                                                        color = colors.textPrimary,
+                                                        fontSize = 14.sp
+                                                    )
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Outlined.FileDownload,
+                                                        contentDescription = null,
+                                                        tint = colors.textPrimary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                },
+                                                onClick = {
+                                                    showExportAllMenu = false
+                                                    val resultsSnapshot = uiState.searchResults
+                                                    startExcelSave(itemCount = resultsSnapshot.size) {
+                                                        ExcelExporter.buildWorkbookForAllResults(resultsSnapshot)
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1290,6 +1334,11 @@ fun SearchScreen(
                                     }
                                 }
 
+                                val isCardExpanded = FileExpansionStateHelper.isExpanded(group.fileUri, collapsedFileUris)
+                                val onToggleCardExpanded: () -> Unit = {
+                                    collapsedFileUris = FileExpansionStateHelper.toggleFile(group.fileUri, collapsedFileUris)
+                                }
+
                                 if (group.isDocument) {
                                     // Grouped Card for Word (.docx) & PDF (.pdf) (Edge-to-Edge matching Excel)
                                     WordPdfGroupedCard(
@@ -1303,6 +1352,8 @@ fun SearchScreen(
                                         fileRecord = fileRecord,
                                         workspaceName = wsName,
                                         searchFilter = uiState.searchFilter,
+                                        isExpanded = isCardExpanded,
+                                        onToggleExpanded = onToggleCardExpanded,
                                         onCopySnippet = { text ->
                                             clipboardManager.setText(AnnotatedString(text))
                                             coroutineScope.launch {
@@ -1327,6 +1378,8 @@ fun SearchScreen(
                                         fileRecord = fileRecord,
                                         workspaceName = wsName,
                                         searchFilter = uiState.searchFilter,
+                                        isExpanded = isCardExpanded,
+                                        onToggleExpanded = onToggleCardExpanded,
                                         onOpenFile = { onOpenFile(group.fileUri) },
                                         onViewRecord = { activeRecordDetail = it },
                                         onCopyRow = { text ->
@@ -1393,6 +1446,8 @@ private fun WorkspaceSwitcherItem(
 private data class ActiveFilterChipItem(
     val id: String,
     val label: String,
+    val icon: ImageVector,
+    val iconTint: Color? = null,
     val onRemove: () -> Unit
 )
 
@@ -1413,7 +1468,8 @@ private fun ActiveFiltersStrip(
                 add(
                     ActiveFilterChipItem(
                         id = "method",
-                        label = "الطريقة: ${filter.method.displayName}",
+                        label = filter.method.displayName,
+                        icon = Icons.Outlined.Search,
                         onRemove = { onFilterChanged(filter.copy(method = defaultMethod)) }
                     )
                 )
@@ -1423,6 +1479,7 @@ private fun ActiveFiltersStrip(
                     ActiveFilterChipItem(
                         id = "diacritics",
                         label = "مطابقة التشكيل",
+                        icon = Icons.Outlined.Spellcheck,
                         onRemove = { onFilterChanged(filter.copy(ignoreDiacritics = true)) }
                     )
                 )
@@ -1433,10 +1490,13 @@ private fun ActiveFiltersStrip(
                 SupportedFileTypeGroups.ALL_GROUPS.forEach { grp ->
                     if (grp.extensions.all { filter.selectedExtensions.contains(it) }) {
                         handledExts.addAll(grp.extensions)
+                        val groupVisual = FileTypeHelper.getVisualForGroup(grp)
                         add(
                             ActiveFilterChipItem(
                                 id = "ext_grp_${grp.id}",
                                 label = grp.displayName,
+                                icon = groupVisual.icon,
+                                iconTint = groupVisual.color,
                                 onRemove = {
                                     onFilterChanged(
                                         filter.copy(selectedExtensions = filter.selectedExtensions - grp.extensions)
@@ -1448,10 +1508,13 @@ private fun ActiveFiltersStrip(
                 }
                 val leftover = filter.selectedExtensions - handledExts
                 leftover.sorted().forEach { ext ->
+                    val extVisual = FileTypeHelper.getVisual("file.$ext")
                     add(
                         ActiveFilterChipItem(
                             id = "ext_$ext",
                             label = ".$ext",
+                            icon = extVisual.icon,
+                            iconTint = extVisual.color,
                             onRemove = {
                                 onFilterChanged(
                                     filter.copy(selectedExtensions = filter.selectedExtensions - ext)
@@ -1468,7 +1531,8 @@ private fun ActiveFiltersStrip(
                     add(
                         ActiveFilterChipItem(
                             id = "ws_$wsId",
-                            label = "مجلد: $wsName",
+                            label = wsName,
+                            icon = Icons.Outlined.FolderOpen,
                             onRemove = {
                                 onFilterChanged(
                                     filter.copy(selectedWorkspaceIds = filter.selectedWorkspaceIds - wsId)
@@ -1480,20 +1544,29 @@ private fun ActiveFiltersStrip(
             }
 
             if (filter.selectedFileUris.isNotEmpty()) {
-                val label = if (filter.selectedFileUris.size == 1) {
+                if (filter.selectedFileUris.size == 1) {
                     val onlyUri = filter.selectedFileUris.first()
-                    val name = indexedFilesByUri[onlyUri]?.fileName ?: "ملف محدد"
-                    "ملف: $name"
-                } else {
-                    "${filter.selectedFileUris.size} ملفات محددة"
-                }
-                add(
-                    ActiveFilterChipItem(
-                        id = "files",
-                        label = label,
-                        onRemove = { onFilterChanged(filter.copy(selectedFileUris = emptySet())) }
+                    val name = indexedFilesByUri[onlyUri]?.fileName
+                    val fileVisual = name?.let { FileTypeHelper.getVisual(it) }
+                    add(
+                        ActiveFilterChipItem(
+                            id = "files",
+                            label = name ?: "ملف محدد",
+                            icon = fileVisual?.icon ?: Icons.Outlined.Description,
+                            iconTint = fileVisual?.color,
+                            onRemove = { onFilterChanged(filter.copy(selectedFileUris = emptySet())) }
+                        )
                     )
-                )
+                } else {
+                    add(
+                        ActiveFilterChipItem(
+                            id = "files",
+                            label = "${filter.selectedFileUris.size} ملفات محددة",
+                            icon = Icons.Outlined.Description,
+                            onRemove = { onFilterChanged(filter.copy(selectedFileUris = emptySet())) }
+                        )
+                    )
+                }
             }
         }
     }
@@ -1519,6 +1592,12 @@ private fun ActiveFiltersStrip(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
+                Icon(
+                    imageVector = chip.icon,
+                    contentDescription = null,
+                    tint = chip.iconTint ?: colors.textSecondary,
+                    modifier = Modifier.size(14.dp)
+                )
                 Text(
                     text = chip.label,
                     fontSize = 12.sp,

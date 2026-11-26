@@ -75,6 +75,8 @@ fun WordPdfGroupedCard(
     fileRecord: IndexedFileRecord? = null,
     workspaceName: String? = null,
     searchFilter: SearchFilter = SearchFilter(),
+    isExpanded: Boolean? = null,
+    onToggleExpanded: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -90,7 +92,15 @@ fun WordPdfGroupedCard(
     val highlightBg = if (isDark) Color(0xFF3D351A) else Color(0xFFFFECB3)
     val highlightFg = if (isDark) Color(0xFFFFE082) else Color(0xFF332600)
 
-    var isCardExpanded by remember { mutableStateOf(true) }
+    var localExpanded by remember { mutableStateOf(true) }
+    val isCardExpanded = isExpanded ?: localExpanded
+    val toggleExpanded: () -> Unit = {
+        if (onToggleExpanded != null) {
+            onToggleExpanded()
+        } else {
+            localExpanded = !localExpanded
+        }
+    }
     var showHeaderMenu by remember { mutableStateOf(false) }
     var showFileDetailsDialog by remember { mutableStateOf(false) }
     var showExportChoiceDialog by remember { mutableStateOf(false) }
@@ -160,7 +170,7 @@ fun WordPdfGroupedCard(
                     .fillMaxWidth()
                     .background(topBarBg)
                     .combinedClickable(
-                        onClick = { isCardExpanded = !isCardExpanded },
+                        onClick = toggleExpanded,
                         onLongClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             showHeaderMenu = true
