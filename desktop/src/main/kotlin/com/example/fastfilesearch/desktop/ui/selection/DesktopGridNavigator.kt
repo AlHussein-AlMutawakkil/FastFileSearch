@@ -67,16 +67,6 @@ data class SheetGridModel(
         )
     }
 
-    fun buildRowRange(anchor: RowKey, target: RowKey): List<SelectedRowData> {
-        val minRow = minOf(anchor.rowIndex, target.rowIndex).coerceIn(0, (rowCount - 1).coerceAtLeast(0))
-        val maxRow = maxOf(anchor.rowIndex, target.rowIndex).coerceIn(0, (rowCount - 1).coerceAtLeast(0))
-        val list = ArrayList<SelectedRowData>(maxRow - minRow + 1)
-        for (r in minRow..maxRow) {
-            buildRowData(r)?.let { list.add(it) }
-        }
-        return list
-    }
-
     fun buildAllCells(): List<SelectedCellData> {
         val list = ArrayList<SelectedCellData>(rowCount * maxCols)
         for (r in 0 until rowCount) {
@@ -107,16 +97,10 @@ object DesktopGridNavigator {
                 res.rowNumber ?: DesktopTableCellHelper.extractSheetAndRow(res.location).second.toIntOrNull() ?: 0
             }
             val headers = sorted.firstOrNull { it.columnHeaders.isNotEmpty() }?.columnHeaders ?: emptyList()
-            val sheetId = "${group.fileUri}::$sheetName"
-            val visible = if (showAllRows || sheetId in expandedSheets || sorted.size <= 30) {
-                sorted
-            } else {
-                sorted.take(30)
-            }
-            val rowNums = visible.map { res ->
+            val rowNums = sorted.map { res ->
                 res.rowNumber?.toString() ?: DesktopTableCellHelper.extractSheetAndRow(res.location).second
             }
-            val parsedRows = visible.map { res ->
+            val parsedRows = sorted.map { res ->
                 DesktopTableCellHelper.splitIntoCells(res.snippet)
             }
             val maxCols = maxOf(parsedRows.maxOfOrNull { it.size } ?: 1, headers.size).coerceAtLeast(1)
@@ -128,7 +112,7 @@ object DesktopGridNavigator {
                 headers = headers,
                 rowNumbers = rowNums,
                 rows = parsedRows,
-                results = visible,
+                results = sorted,
                 maxCols = maxCols
             )
         }
@@ -138,34 +122,87 @@ object DesktopGridNavigator {
         sheets: List<SheetGridModel>,
         currentState: SelectionState,
         direction: GridNavDirection,
-        isShiftPressed: Boolean,
         isRtl: Boolean = true
     ): SelectionState {
         if (sheets.isEmpty()) return currentState
 
+        val nonEmptySheets = sheets.filter { it.rowCount > 0 && it.maxCols > 0 }
+        if (nonEmptySheets.isEmpty()) return currentState
+
+        // Support navigating directly from Row-Number selection mode cleanly
+        if (currentState.activeCell == null && currentState.mode == SelectionMode.ROWS && currentState.focusedRow != null) {
+            val focused = currentState.focusedRow
+            val sheetIdx = nonEmptySheets.indexOfFirst { it.fileUri == focused.fileUri && it.sheetName == focused.sheetName }
+            if (sheetIdx >= 0) {
+                val targetSheet = nonEmptySheets[sheetIdx]
+                val curRow = focused.rowIndex.coerceIn(0, targetSheet.rowCount - 1)
+                when (direction) {
+                    GridNavDirection.UP -> {
+                        if (curRow > 0) {
+                            targetSheet.buildRowData(curRow - 1)?.let { return currentState.selectSingleRow(it) }
+                        } else if (sheetIdx > 0) {
+                            val prev = nonEmptySheets[sheetIdx - 1]
+                            prev.buildRowData(prev.rowCount - 1)?.let { return currentState.selectSingleRow(it) }
+                        }
+                        return currentState
+                    }
+                    GridNavDirection.DOWN -> {
+                        if (curRow < targetSheet.rowCount - 1) {
+                            targetSheet.buildRowData(curRow + 1)?.let { return currentState.selectSingleRow(it) }
+                        } else if (sheetIdx < nonEmptySheets.lastIndex) {
+                            val next = nonEmptySheets[sheetIdx + 1]
+                            next.buildRowData(0)?.let { return currentState.selectSingleRow(it) }
+                        }
+                        return currentState
+                    }
+                    GridNavDirection.RIGHT, GridNavDirection.LEFT -> {
+                        val entryCol = if (direction == GridNavDirection.LEFT && isRtl) 0 else if (!isRtl && direction == GridNavDirection.RIGHT) 0 else 0
+                        targetSheet.buildCellData(curRow, entryCol)?.let { return currentState.selectSingleCell(it) }
+                        return currentState
+                    }
+                }
+            }
+        }
+
         val currentKey = currentState.activeCell
-        val targetSheet = if (currentKey != null) {
-            sheets.firstOrNull { it.fileUri == currentKey.fileUri && it.sheetName == currentKey.sheetName }
+        val targetSheetIdx = if (currentKey != null) {
+            nonEmptySheets.indexOfFirst { it.fileUri == currentKey.fileUri && it.sheetName == currentKey.sheetName }
         } else {
-            null
-        } ?: sheets.firstOrNull { it.rowCount > 0 && it.maxCols > 0 } ?: return currentState
-
-        if (targetSheet.rowCount <= 0 || targetSheet.maxCols <= 0) return currentState
-
-        if (currentKey == null || currentKey.fileUri != targetSheet.fileUri || currentKey.sheetName != targetSheet.sheetName) {
-            val firstCell = targetSheet.buildCellData(0, 0) ?: return currentState
+            -1
+        }
+        if (targetSheetIdx < 0) {
+            val firstSheet = nonEmptySheets.first()
+            val firstCell = firstSheet.buildCellData(0, 0) ?: return currentState
             return currentState.selectSingleCell(firstCell)
         }
 
-        val curRow = currentKey.rowIndex.coerceIn(0, targetSheet.rowCount - 1)
+        val targetSheet = nonEmptySheets[targetSheetIdx]
+        val curRow = currentKey!!.rowIndex.coerceIn(0, targetSheet.rowCount - 1)
         val curCol = currentKey.colIndex.coerceIn(0, targetSheet.maxCols - 1)
 
+        var nextSheet = targetSheet
         var nextRow = curRow
         var nextCol = curCol
 
         when (direction) {
-            GridNavDirection.UP -> nextRow = (curRow - 1).coerceAtLeast(0)
-            GridNavDirection.DOWN -> nextRow = (curRow + 1).coerceAtMost(targetSheet.rowCount - 1)
+            GridNavDirection.UP -> {
+                if (curRow > 0) {
+                    nextRow = curRow - 1
+                } else if (targetSheetIdx > 0) {
+                    nextSheet = nonEmptySheets[targetSheetIdx - 1]
+                    nextRow = nextSheet.rowCount - 1
+                    nextCol = curCol.coerceIn(0, nextSheet.maxCols - 1)
+                }
+            }
+            GridNavDirection.DOWN -> {
+                if (curRow < targetSheet.rowCount - 1) {
+                    nextRow = curRow + 1
+                } else if (targetSheetIdx < nonEmptySheets.lastIndex) {
+                    nextSheet = nonEmptySheets[targetSheetIdx + 1]
+                    nextRow = 0
+                    nextCol = curCol.coerceIn(0, nextSheet.maxCols - 1)
+                }
+            }
             GridNavDirection.RIGHT -> {
                 nextCol = if (isRtl) {
                     (curCol - 1).coerceAtLeast(0)
@@ -182,27 +219,7 @@ object DesktopGridNavigator {
             }
         }
 
-        val nextKey = CellKey(
-            fileUri = targetSheet.fileUri,
-            sheetName = targetSheet.sheetName,
-            rowIndex = nextRow,
-            colIndex = nextCol
-        )
-
-        return if (isShiftPressed) {
-            val anchor = currentState.anchorCell
-                ?.takeIf { it.fileUri == targetSheet.fileUri && it.sheetName == targetSheet.sheetName }
-                ?: currentKey
-            val rangeCells = targetSheet.buildCellRange(anchor, nextKey)
-            currentState.selectCellRange(
-                rangeCells = rangeCells,
-                focusKey = nextKey,
-                anchorKey = anchor,
-                additive = false
-            )
-        } else {
-            val cellData = targetSheet.buildCellData(nextRow, nextCol) ?: return currentState
-            currentState.selectSingleCell(cellData)
-        }
+        val cellData = nextSheet.buildCellData(nextRow, nextCol) ?: return currentState
+        return currentState.selectSingleCell(cellData)
     }
 }

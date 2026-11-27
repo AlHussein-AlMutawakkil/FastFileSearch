@@ -34,7 +34,9 @@ data class IndexedFileRecord(
     val mimeType: String? = null,
     val size: Long,
     val lastModified: Long,
-    val indexedAt: Long = System.currentTimeMillis()
+    val indexedAt: Long = System.currentTimeMillis(),
+    val fileId: Long = 0L,
+    val fileType: String = fileName.substringAfterLast('.', "").lowercase()
 )
 
 data class FileSegment(
@@ -59,11 +61,28 @@ data class SearchResult(
     val columnHeaders: List<String> = emptyList()
 )
 
+data class MatchedFileSummary(
+    val fileUri: String,
+    val workspaceId: String,
+    val fileName: String,
+    val fileType: String,
+    val totalMatches: Int
+)
+
 data class FileResultGroup(
     val fileUri: String,
     val fileName: String,
     val isDocument: Boolean,
-    val results: List<SearchResult>
+    val results: List<SearchResult>,
+    val totalMatchesCount: Int = results.size,
+    val hasMoreRows: Boolean = results.size < totalMatchesCount
+)
+
+data class DesktopSearchResponse(
+    val totalResultsCount: Int = 0,
+    val fileSummaries: List<MatchedFileSummary> = emptyList(),
+    val typeCounts: Map<String, Int> = emptyMap(),
+    val groups: List<FileResultGroup> = emptyList()
 )
 
 data class FilteredFileType(

@@ -1,11 +1,9 @@
 package com.example.fastfilesearch.desktop.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentPaste
@@ -32,8 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -128,64 +122,44 @@ fun DesktopActivationScreen(
                         color = colors.textSecondary
                     )
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.subCardBackground)
-                            .border(1.dp, colors.divider, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            BasicTextField(
-                                value = licenseInput,
-                                onValueChange = {
-                                    licenseInput = it
-                                    feedbackMessage = null
-                                },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = colors.textPrimary,
-                                    fontSize = 15.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    textAlign = TextAlign.Center
-                                ),
-                                cursorBrush = SolidColor(colors.textPrimary),
-                                modifier = Modifier.weight(1f),
-                                decorationBox = { inner ->
-                                    if (licenseInput.isEmpty()) {
-                                        Text(
-                                            text = "XXXX-XXXX-XXXX-XXXX",
-                                            color = colors.textSecondary.copy(alpha = 0.55f),
-                                            fontSize = 14.sp,
-                                            fontFamily = FontFamily.Monospace,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier.fillMaxWidth()
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        FluentTextBox(
+                            value = licenseInput,
+                            onValueChange = {
+                                licenseInput = it
+                                feedbackMessage = null
+                            },
+                            placeholder = "XXXX-XXXX-XXXX-XXXX",
+                            isError = feedbackMessage != null && !feedbackMessage!!.contains("نسخ"),
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontSize = 15.sp,
+                                fontFamily = FontFamily.Monospace,
+                                textAlign = TextAlign.Center
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                            trailingContent = {
+                                FluentTooltip("لصق الكود من الحافظة") {
+                                    IconButton(
+                                        onClick = {
+                                            val pasted = DesktopSystemActions.pasteFromClipboard().trim()
+                                            if (pasted.isNotEmpty()) {
+                                                licenseInput = pasted
+                                                feedbackMessage = null
+                                            }
+                                        },
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.ContentPaste,
+                                            contentDescription = "لصق الكود",
+                                            tint = colors.textSecondary,
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
-                                    inner()
                                 }
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                val pasted = DesktopSystemActions.pasteFromClipboard().trim()
-                                if (pasted.isNotEmpty()) {
-                                    licenseInput = pasted
-                                    feedbackMessage = null
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ContentPaste,
-                                contentDescription = "لصق الكود",
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                            }
+                        )
                     }
 
                     feedbackMessage?.let { msg ->

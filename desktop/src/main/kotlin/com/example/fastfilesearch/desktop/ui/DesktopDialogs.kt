@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,7 +39,6 @@ import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,9 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -124,8 +120,22 @@ fun DesktopRowDetailModal(
                             color = colors.textSecondary
                         )
                     }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = colors.textSecondary, modifier = Modifier.size(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FluentTooltip("نسخ") {
+                            IconButton(onClick = { onCopy(formattedText) }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = "نسخ",
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+                        FluentTooltip("إغلاق") {
+                            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = colors.textSecondary, modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
 
@@ -215,22 +225,6 @@ fun DesktopRowDetailModal(
                         InteractiveValueChips(text = result.snippet, onCopy = onCopy)
                     }
                 }
-
-                HorizontalDivider(color = colors.divider, thickness = 1.dp)
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DesktopPrimaryButton(
-                        text = "نسخ البيانات",
-                        icon = Icons.Outlined.ContentCopy,
-                        onClick = { onCopy(formattedText) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    DesktopSecondaryButton(
-                        text = "إغلاق",
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
             }
         }
     }
@@ -273,8 +267,22 @@ fun DesktopCellDetailModal(
                             Text(text = subtitle, fontSize = 12.sp, color = colors.textSecondary)
                         }
                     }
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = colors.textSecondary, modifier = Modifier.size(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FluentTooltip("نسخ") {
+                            IconButton(onClick = { onCopy(text) }, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ContentCopy,
+                                    contentDescription = "نسخ",
+                                    tint = colors.textSecondary,
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                        }
+                        FluentTooltip("إغلاق") {
+                            IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "إغلاق", tint = colors.textSecondary, modifier = Modifier.size(18.dp))
+                            }
+                        }
                     }
                 }
 
@@ -306,22 +314,6 @@ fun DesktopCellDetailModal(
                         )
                     }
                     InteractiveValueChips(text = text, onCopy = onCopy)
-                }
-
-                HorizontalDivider(color = colors.divider, thickness = 1.dp)
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    DesktopPrimaryButton(
-                        text = "نسخ النص",
-                        icon = Icons.Outlined.ContentCopy,
-                        onClick = { onCopy(text) },
-                        modifier = Modifier.weight(1f)
-                    )
-                    DesktopSecondaryButton(
-                        text = "إغلاق",
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f)
-                    )
                 }
             }
         }
@@ -646,7 +638,7 @@ fun DesktopFilterDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text("تجاهل التشكيل والهمزات", fontSize = 13.5.sp, color = colors.textPrimary)
-                            Switch(
+                            FluentToggleSwitch(
                                 checked = tempIgnoreDiacritics,
                                 onCheckedChange = { tempIgnoreDiacritics = it }
                             )
@@ -818,37 +810,24 @@ fun DesktopFilterDialog(
                             )
                         } else {
                             if (availableFiles.size > 5) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(colors.cardBackground)
-                                        .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.Search, null, tint = colors.textSecondary, modifier = Modifier.size(16.dp))
-                                    BasicTextField(
-                                        value = fileQuery,
-                                        onValueChange = { fileQuery = it },
-                                        singleLine = true,
-                                        textStyle = TextStyle(color = colors.textPrimary, fontSize = 13.sp),
-                                        cursorBrush = SolidColor(colors.textPrimary),
-                                        modifier = Modifier.weight(1f),
-                                        decorationBox = { inner ->
-                                            if (fileQuery.isEmpty()) {
-                                                Text("تصفية أسماء الملفات...", fontSize = 12.5.sp, color = colors.textSecondary)
+                                FluentTextBox(
+                                    value = fileQuery,
+                                    onValueChange = { fileQuery = it },
+                                    placeholder = "تصفية أسماء الملفات...",
+                                    modifier = Modifier.fillMaxWidth(),
+                                    leadingContent = {
+                                        Icon(Icons.Default.Search, null, tint = colors.textSecondary, modifier = Modifier.size(16.dp))
+                                    },
+                                    trailingContent = if (fileQuery.isNotEmpty()) {
+                                        {
+                                            IconButton(onClick = { fileQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                                Icon(Icons.Default.Close, null, tint = colors.textSecondary, modifier = Modifier.size(14.dp))
                                             }
-                                            inner()
                                         }
-                                    )
-                                    if (fileQuery.isNotEmpty()) {
-                                        IconButton(onClick = { fileQuery = "" }, modifier = Modifier.size(20.dp)) {
-                                            Icon(Icons.Default.Close, null, tint = colors.textSecondary, modifier = Modifier.size(14.dp))
-                                        }
+                                    } else {
+                                        null
                                     }
-                                }
+                                )
                             }
 
                             Column(

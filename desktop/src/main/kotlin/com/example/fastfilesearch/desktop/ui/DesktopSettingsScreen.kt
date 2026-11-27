@@ -3,7 +3,11 @@ package com.example.fastfilesearch.desktop.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,9 +19,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -40,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -127,19 +130,24 @@ fun DesktopSettingsScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Text(
-            text = "الإعدادات والترخيص",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = colors.textPrimary
-        )
+        Column(
+            modifier = Modifier
+                .widthIn(max = 860.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "الإعدادات",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
 
         statusToast?.let { msg ->
             DesktopSectionCard {
@@ -447,6 +455,7 @@ fun DesktopSettingsScreen(
                 )
             }
         }
+        }
     }
 
     if (showRenewDialog) {
@@ -465,33 +474,23 @@ fun DesktopSettingsScreen(
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.subCardBackground)
-                            .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                            BasicTextField(
-                                value = newCode,
-                                onValueChange = {
-                                    newCode = it
-                                    renewErr = null
-                                },
-                                singleLine = true,
-                                textStyle = TextStyle(
-                                    color = colors.textPrimary,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
-                                    textAlign = TextAlign.Center
-                                ),
-                                cursorBrush = SolidColor(colors.textPrimary),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        FluentTextBox(
+                            value = newCode,
+                            onValueChange = {
+                                newCode = it
+                                renewErr = null
+                            },
+                            placeholder = "XXXX-XXXX-XXXX-XXXX",
+                            isError = renewErr != null,
+                            textStyle = TextStyle(
+                                color = colors.textPrimary,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     renewErr?.let { err ->
@@ -643,39 +642,24 @@ private fun PasscodeFieldBox(
     onToggleVisible: () -> Unit
 ) {
     val colors = LocalDesktopColors.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.subCardBackground)
-            .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-            textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
-            cursorBrush = SolidColor(colors.textPrimary),
-            modifier = Modifier.weight(1f),
-            decorationBox = { inner ->
-                if (value.isEmpty()) {
-                    Text(placeholder, fontSize = 13.sp, color = colors.textSecondary.copy(alpha = 0.6f))
-                }
-                inner()
+    FluentTextBox(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = placeholder,
+        visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
+        modifier = Modifier.fillMaxWidth(),
+        trailingContent = {
+            IconButton(onClick = onToggleVisible, modifier = Modifier.size(26.dp)) {
+                Icon(
+                    imageVector = if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                    contentDescription = null,
+                    tint = colors.textSecondary,
+                    modifier = Modifier.size(17.dp)
+                )
             }
-        )
-        IconButton(onClick = onToggleVisible, modifier = Modifier.size(26.dp)) {
-            Icon(
-                imageVector = if (visible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                contentDescription = null,
-                tint = colors.textSecondary,
-                modifier = Modifier.size(17.dp)
-            )
         }
-    }
+    )
 }
 
 @Composable
@@ -685,22 +669,14 @@ private fun ToggleSettingRow(
     checked: Boolean,
     onToggle: (Boolean) -> Unit
 ) {
-    val colors = LocalDesktopColors.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    FluentSettingRow(
+        title = title,
+        subtitle = subtitle,
+        onClick = { onToggle(!checked) }
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(text = title, fontSize = 14.sp, color = colors.textPrimary)
-            if (!subtitle.isNullOrBlank()) {
-                Text(text = subtitle, fontSize = 12.sp, color = colors.textSecondary)
-            }
-        }
-        SelectableChip(
-            label = if (checked) "مفعّل" else "معطّل",
-            selected = checked,
-            onClick = { onToggle(!checked) }
+        FluentToggleSwitch(
+            checked = checked,
+            onCheckedChange = onToggle
         )
     }
 }
@@ -725,11 +701,23 @@ private fun SelectableChip(
     onClick: () -> Unit
 ) {
     val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val bg = when {
+        selected -> colors.controlActiveBackground
+        isHovered -> colors.cardBackground
+        else -> colors.subCardBackground
+    }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) colors.controlActiveBackground else colors.subCardBackground)
-            .border(1.dp, if (selected) colors.controlActiveBackground else colors.divider, RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+            .background(bg)
+            .border(
+                1.dp,
+                if (selected) colors.controlActiveBackground else colors.divider,
+                RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius)
+            )
+            .hoverable(interactionSource = interactionSource)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp)
     ) {

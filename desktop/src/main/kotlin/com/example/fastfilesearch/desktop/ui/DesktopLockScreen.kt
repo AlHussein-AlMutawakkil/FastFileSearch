@@ -1,11 +1,9 @@
 package com.example.fastfilesearch.desktop.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
@@ -33,10 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -133,75 +127,54 @@ fun DesktopLockScreen(
                     modifier = Modifier.padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.subCardBackground)
-                            .border(
-                                1.dp,
-                                if (errorMessage != null) colors.dangerText else colors.divider,
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BasicTextField(
-                            value = passcode,
-                            onValueChange = {
-                                passcode = it
-                                errorMessage = null
+                    FluentTextBox(
+                        value = passcode,
+                        onValueChange = {
+                            passcode = it
+                            errorMessage = null
+                        },
+                        placeholder = "أدخل كلمة المرور",
+                        enabled = lockoutSeconds == 0,
+                        isError = errorMessage != null,
+                        visualTransformation = if (passwordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        textStyle = TextStyle(
+                            color = colors.textPrimary,
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Start
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        fieldModifier = Modifier
+                            .focusRequester(focusRequester)
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown &&
+                                    (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)
+                                ) {
+                                    attemptUnlock()
+                                    true
+                                } else {
+                                    false
+                                }
                             },
-                            singleLine = true,
-                            enabled = lockoutSeconds == 0,
-                            visualTransformation = if (passwordVisible) {
-                                VisualTransformation.None
-                            } else {
-                                PasswordVisualTransformation()
-                            },
-                            textStyle = TextStyle(
-                                color = colors.textPrimary,
-                                fontSize = 15.sp,
-                                textAlign = TextAlign.Start
-                            ),
-                            cursorBrush = SolidColor(colors.textPrimary),
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(focusRequester)
-                                .onPreviewKeyEvent { keyEvent ->
-                                    if (keyEvent.type == KeyEventType.KeyDown &&
-                                        (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)
-                                    ) {
-                                        attemptUnlock()
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                },
-                            decorationBox = { inner ->
-                                if (passcode.isEmpty()) {
-                                    Text(
-                                        text = "أدخل كلمة المرور",
-                                        color = colors.textSecondary.copy(alpha = 0.6f),
-                                        fontSize = 14.sp
+                        trailingContent = {
+                            FluentTooltip(if (passwordVisible) "إخفاء كلمة المرور" else "إظهار كلمة المرور") {
+                                IconButton(
+                                    onClick = { passwordVisible = !passwordVisible },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                        contentDescription = if (passwordVisible) "إخفاء" else "إظهار",
+                                        tint = colors.textSecondary,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
-                                inner()
                             }
-                        )
-
-                        IconButton(
-                            onClick = { passwordVisible = !passwordVisible },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                contentDescription = if (passwordVisible) "إخفاء" else "إظهار",
-                                tint = colors.textSecondary,
-                                modifier = Modifier.size(18.dp)
-                            )
                         }
-                    }
+                    )
 
                     if (lockoutSeconds > 0) {
                         Text(

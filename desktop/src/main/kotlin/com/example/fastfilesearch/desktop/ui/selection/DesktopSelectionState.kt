@@ -41,16 +41,15 @@ data class SelectedCellData(
 )
 
 /**
- * Tracks multi-cell and multi-row desktop selection, active keyboard-focus cell,
- * and Shift-selection anchor for Excel-like click/drag/arrow navigation.
+ * Tracks single or Ctrl-additive multi-cell and multi-row desktop selection,
+ * plus active keyboard-focus cell for arrow navigation.
  */
 data class SelectionState(
     val mode: SelectionMode = SelectionMode.NONE,
     val selectedRows: Map<RowKey, SelectedRowData> = emptyMap(),
     val selectedCells: Map<CellKey, SelectedCellData> = emptyMap(),
     val activeCell: CellKey? = null,
-    val anchorCell: CellKey? = null,
-    val anchorRow: RowKey? = null
+    val focusedRow: RowKey? = null
 ) {
     val count: Int
         get() = when (mode) {
@@ -72,8 +71,7 @@ data class SelectionState(
             selectedRows = emptyMap(),
             selectedCells = mapOf(cellData.key to cellData),
             activeCell = cellData.key,
-            anchorCell = cellData.key,
-            anchorRow = null
+            focusedRow = null
         )
     }
 
@@ -87,28 +85,23 @@ data class SelectionState(
         return if (newMap.isEmpty()) {
             SelectionState()
         } else {
-            copy(
+            SelectionState(
                 mode = SelectionMode.CELLS,
                 selectedRows = emptyMap(),
                 selectedCells = newMap,
-                activeCell = cellData.key,
-                anchorCell = cellData.key,
-                anchorRow = null
+                activeCell = if (newMap.containsKey(cellData.key)) cellData.key else newMap.keys.lastOrNull(),
+                focusedRow = null
             )
         }
     }
 
-    fun selectCellRange(
+    fun selectDraggedCellRange(
         rangeCells: List<SelectedCellData>,
         focusKey: CellKey,
-        anchorKey: CellKey,
+        baseCells: Map<CellKey, SelectedCellData> = emptyMap(),
         additive: Boolean = false
     ): SelectionState {
-        val newMap = if (additive && mode == SelectionMode.CELLS) {
-            selectedCells.toMutableMap()
-        } else {
-            mutableMapOf()
-        }
+        val newMap = if (additive) baseCells.toMutableMap() else mutableMapOf()
         for (c in rangeCells) {
             newMap[c.key] = c
         }
@@ -120,8 +113,7 @@ data class SelectionState(
                 selectedRows = emptyMap(),
                 selectedCells = newMap,
                 activeCell = focusKey,
-                anchorCell = anchorKey,
-                anchorRow = null
+                focusedRow = null
             )
         }
     }
@@ -132,8 +124,7 @@ data class SelectionState(
             selectedRows = mapOf(rowData.key to rowData),
             selectedCells = emptyMap(),
             activeCell = null,
-            anchorCell = null,
-            anchorRow = rowData.key
+            focusedRow = rowData.key
         )
     }
 
@@ -147,41 +138,12 @@ data class SelectionState(
         return if (newMap.isEmpty()) {
             SelectionState()
         } else {
-            copy(
-                mode = SelectionMode.ROWS,
-                selectedRows = newMap,
-                selectedCells = emptyMap(),
-                activeCell = null,
-                anchorCell = null,
-                anchorRow = rowData.key
-            )
-        }
-    }
-
-    fun selectRowRange(
-        rangeRows: List<SelectedRowData>,
-        focusKey: RowKey,
-        anchorKey: RowKey,
-        additive: Boolean = false
-    ): SelectionState {
-        val newMap = if (additive && mode == SelectionMode.ROWS) {
-            selectedRows.toMutableMap()
-        } else {
-            mutableMapOf()
-        }
-        for (r in rangeRows) {
-            newMap[r.key] = r
-        }
-        return if (newMap.isEmpty()) {
-            SelectionState()
-        } else {
             SelectionState(
                 mode = SelectionMode.ROWS,
                 selectedRows = newMap,
                 selectedCells = emptyMap(),
                 activeCell = null,
-                anchorCell = null,
-                anchorRow = anchorKey
+                focusedRow = if (newMap.containsKey(rowData.key)) rowData.key else newMap.keys.lastOrNull()
             )
         }
     }
@@ -194,8 +156,7 @@ data class SelectionState(
             selectedRows = newMap,
             selectedCells = emptyMap(),
             activeCell = null,
-            anchorCell = null,
-            anchorRow = allRows.first().key
+            focusedRow = allRows.first().key
         )
     }
 
@@ -208,8 +169,7 @@ data class SelectionState(
             selectedRows = newMap,
             selectedCells = emptyMap(),
             activeCell = null,
-            anchorCell = null,
-            anchorRow = rows.first().key
+            focusedRow = rows.first().key
         )
     }
 
@@ -221,12 +181,16 @@ data class SelectionState(
             selectedRows = emptyMap(),
             selectedCells = newMap,
             activeCell = allCells.first().key,
-            anchorCell = allCells.first().key,
-            anchorRow = null
+            focusedRow = null
         )
     }
 
     fun clear(): SelectionState = SelectionState()
+
+    fun shouldShowPreviewMenuItem(): Boolean {
+        return (mode == SelectionMode.CELLS && count == 1) ||
+            (mode == SelectionMode.ROWS && count == 1)
+    }
 
     fun getFormattedCountArabic(): String {
         return when (mode) {

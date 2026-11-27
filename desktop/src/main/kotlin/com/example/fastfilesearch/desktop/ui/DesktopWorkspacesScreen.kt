@@ -17,9 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -41,9 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -299,29 +296,45 @@ fun DesktopWorkspacesScreen(
                                 }
                             }
 
-                            IconButton(
-                                onClick = {
-                                    workspaceToRename = ws
-                                    renameInput = ws.name
-                                },
-                                enabled = !indexProgress.isIndexing
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Edit,
-                                    contentDescription = "إعادة تسمية المجلد",
-                                    tint = colors.textSecondary
-                                )
+                            FluentTooltip("فتح المجلد في مستكشف Windows") {
+                                IconButton(
+                                    onClick = { DesktopSystemActions.openFile(ws.path) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                                        contentDescription = "فتح المجلد في Explorer",
+                                        tint = colors.textSecondary
+                                    )
+                                }
                             }
 
-                            IconButton(
-                                onClick = { workspaceToDelete = ws },
-                                enabled = !indexProgress.isIndexing
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.DeleteOutline,
-                                    contentDescription = "حذف المجلد",
-                                    tint = colors.dangerText
-                                )
+                            FluentTooltip("إعادة تسمية المجلد") {
+                                IconButton(
+                                    onClick = {
+                                        workspaceToRename = ws
+                                        renameInput = ws.name
+                                    },
+                                    enabled = !indexProgress.isIndexing
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "إعادة تسمية المجلد",
+                                        tint = colors.textSecondary
+                                    )
+                                }
+                            }
+
+                            FluentTooltip("حذف المجلد من الفهرس") {
+                                IconButton(
+                                    onClick = { workspaceToDelete = ws },
+                                    enabled = !indexProgress.isIndexing
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.DeleteOutline,
+                                        contentDescription = "حذف المجلد",
+                                        tint = colors.dangerText
+                                    )
+                                }
                             }
                         }
                         HorizontalDivider(color = colors.divider, thickness = DesktopDesignTokens.DividerThickness)
@@ -342,23 +355,12 @@ fun DesktopWorkspacesScreen(
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.subCardBackground)
-                            .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 12.dp, vertical = 10.dp)
-                    ) {
-                        BasicTextField(
-                            value = renameInput,
-                            onValueChange = { renameInput = it },
-                            singleLine = true,
-                            textStyle = TextStyle(color = colors.textPrimary, fontSize = 14.sp),
-                            cursorBrush = SolidColor(colors.textPrimary),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
+                    FluentTextBox(
+                        value = renameInput,
+                        onValueChange = { renameInput = it },
+                        placeholder = "أدخل اسم المجلد...",
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DesktopPrimaryButton(
                             text = "حفظ",

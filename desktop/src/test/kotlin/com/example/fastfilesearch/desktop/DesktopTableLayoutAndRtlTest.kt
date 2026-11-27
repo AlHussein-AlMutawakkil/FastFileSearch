@@ -1,7 +1,10 @@
 package com.example.fastfilesearch.desktop
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -17,6 +20,7 @@ import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -33,6 +37,9 @@ import com.example.fastfilesearch.desktop.ui.DesktopExcelTableSection
 import com.example.fastfilesearch.desktop.ui.DesktopTableDimensions
 import com.example.fastfilesearch.desktop.ui.DesktopTableLayoutCalculator
 import com.example.fastfilesearch.desktop.ui.ProvideDesktopTheme
+import com.example.fastfilesearch.desktop.ui.selection.CellKey
+import com.example.fastfilesearch.desktop.ui.selection.SelectedCellData
+import com.example.fastfilesearch.desktop.ui.selection.SelectionState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -328,6 +335,124 @@ class DesktopTableLayoutAndRtlTest {
                 "Double-clicking handle should reset Column 1 width back near $initialH1Width, got $resetH1Width",
                 abs(resetH1Width - initialH1Width) <= 2f
             )
+        }
+    }
+
+    @Test
+    fun testUnconstrainedTableHeightRendersAllRowsAndSyncsRtlHorizontalScroll() {
+        val headers = listOf("الرقم", "البيان التفصيلي الطويل للعملية", "الإدارة المسؤولة", "القيمة المالية", "الحالة التنفيذية", "ملاحظات المراجع")
+        val results = (1..25).map { idx ->
+            SearchResult(
+                id = idx.toLong(),
+                fileUri = "C:/docs/tall_sheet.xlsx",
+                fileName = "tall_sheet.xlsx",
+                location = "ورقة: السجل، صف: ${idx + 1}",
+                sheetName = "السجل",
+                rowNumber = idx + 1,
+                columnHeaders = headers,
+                snippet = listOf(
+                    "${100 + idx}",
+                    "عملية توريد وتجهيز معدات رقم $idx لفرع المركز الرئيسي",
+                    "المشتريات والعقود",
+                    "${idx * 250}",
+                    "مكتمل",
+                    "مطابقة أصل الفاتورة #$idx"
+                ).joinToString("\t"),
+                query = "توريد"
+            )
+        }
+
+        val headerBoundsMap = mutableMapOf<Int, Rect>()
+        val headerPosMap = mutableMapOf<Int, Offset>()
+        val cellBoundsMap = mutableMapOf<Pair<Int, Int>, Rect>()
+        val cellPosMap = mutableMapOf<Pair<Int, Int>, Offset>()
+        var selectionState by mutableStateOf(SelectionState())
+
+        ImageComposeScene(
+            width = 460,
+            height = 600,
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Rtl
+        ) {
+            ProvideDesktopTheme(isDark = false) {
+                Column(modifier = Modifier.width(460.dp).verticalScroll(rememberScrollState())) {
+                    DesktopExcelTableSection(
+                        results = results,
+                        query = "توريد",
+                        searchFilter = SearchFilter(method = SearchMethod.CONTAINS),
+                        showAllRows = true,
+                        accentColor = Color(0xFF1E7E34),
+                        selectionState = selectionState,
+                        onViewDetail = {},
+                        onHeaderCellBounds = { colIdx, coords ->
+                            if (coords.isAttached) {
+                                headerBoundsMap[colIdx] = coords.boundsInRoot()
+                                headerPosMap[colIdx] = coords.positionInRoot()
+                            }
+                        },
+                        onDataCellBounds = { rowIdx, colIdx, coords ->
+                            if (coords.isAttached) {
+                                cellBoundsMap[rowIdx to colIdx] = coords.boundsInRoot()
+                                cellPosMap[rowIdx to colIdx] = coords.positionInRoot()
+                            }
+                        }
+                    )
+                }
+            }
+        }.use { scene ->
+            scene.render(100_000_000L)
+
+            val h1Before = headerBoundsMap[1]!!
+            val c01Before = cellBoundsMap[0 to 1]!!
+            val c0PosBefore = cellPosMap[0 to 1]!!
+            val c24PosBefore = cellPosMap[24 to 1]!!
+
+            // Synchronized horizontally at rest & table has no fixed height cap (all 25 rows laid out continuously)
+            assertEquals(h1Before.left, c01Before.left, 1f)
+            assertEquals(h1Before.right, c01Before.right, 1f)
+            assertTrue("Row 0 should start below header", c0PosBefore.y >= h1Before.bottom - 1f)
+            assertTrue("Row 24 should extend naturally beyond fixed height caps (${c24PosBefore.y})", c24PosBefore.y > 700f)
+
+            // Activate far column (Col 5) -> triggers real hScroll while header & row 2 are in viewport
+            selectionState = selectionState.selectSingleCell(
+                SelectedCellData(
+                    key = CellKey("C:/docs/tall_sheet.xlsx", "السجل", 2, 5),
+                    fileName = "tall_sheet.xlsx",
+                    sheetName = "السجل",
+                    rowNumber = "4",
+                    columnName = headers[5],
+                    value = "مطابقة"
+                )
+            )
+            scene.render(200_000_000L)
+            scene.render(240_000_000L)
+
+            val h5AfterH = headerBoundsMap[5]!!
+            val c5AfterH = cellBoundsMap[2 to 5]!!
+            val h1PosAfterH = headerPosMap[1]!!
+            assertTrue(
+                "Expected horizontal scroll to shift Column 1 rightwards in RTL (${h1PosAfterH.x} > ${h1Before.left + 20f})",
+                h1PosAfterH.x > h1Before.left + 20f
+            )
+            assertTrue("Expected Col 5 header to be visible after horizontal scroll", h5AfterH.width > 10f)
+            assertEquals("Header Col 5 & data row Col 5 left edge must stay synced horizontally", h5AfterH.left, c5AfterH.left, 1f)
+            assertEquals("Header Col 5 & data row Col 5 right edge must stay synced horizontally", h5AfterH.right, c5AfterH.right, 1f)
+
+            // Scroll outer container vertically (table scrolls naturally with page)
+            val scrollTargetPos = Offset(220f, 250f)
+            repeat(4) { tick ->
+                scene.sendPointerEvent(
+                    eventType = PointerEventType.Scroll,
+                    position = scrollTargetPos,
+                    scrollDelta = Offset(0f, 15f),
+                    timeMillis = 300L + (tick * 20L),
+                    type = PointerType.Mouse
+                )
+                scene.render((310L + tick * 20L) * 1_000_000L)
+            }
+
+            val c24PosAfterV = cellPosMap[24 to 1]!!
+            assertTrue("Table rows should scroll smoothly with outer page (${c24PosAfterV.y} < ${c24PosBefore.y})", c24PosAfterV.y < c24PosBefore.y)
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.fastfilesearch.desktop.engine
 
 import com.example.fastfilesearch.desktop.database.DesktopDatabaseHelper
+import com.example.fastfilesearch.desktop.model.DesktopSearchResponse
 import com.example.fastfilesearch.desktop.model.FileSegment
 import com.example.fastfilesearch.desktop.model.IndexProgress
 import com.example.fastfilesearch.desktop.model.IndexedFileRecord
@@ -246,14 +247,43 @@ class DesktopSearchEngine(
         return dbHelper.getAllIndexedFiles(workspaceId)
     }
 
-    fun search(query: String, filter: SearchFilter = SearchFilter()): List<SearchResult> {
+    fun getIndexedTypeCounts(workspaceId: String? = getActiveWorkspaceId()): Map<String, Int> {
+        return dbHelper.getIndexedTypeCounts(workspaceId)
+    }
+
+    fun cancelActiveSearch() {
+        dbHelper.cancelActiveSearch()
+    }
+
+    private fun resolveEffectiveFilter(filter: SearchFilter): SearchFilter {
         val activeId = getActiveWorkspaceId()
-        val effectiveFilter = if (activeId != null) {
+        return if (activeId != null) {
             filter.copy(selectedWorkspaceIds = setOf(activeId))
         } else {
             filter
         }
-        return dbHelper.search(query, effectiveFilter)
+    }
+
+    fun searchGrouped(
+        query: String,
+        filter: SearchFilter = SearchFilter(),
+        perFileInitialRows: Int = DesktopDatabaseHelper.DEFAULT_PER_FILE_INITIAL_ROWS
+    ): DesktopSearchResponse {
+        return dbHelper.searchGrouped(query, resolveEffectiveFilter(filter), perFileInitialRows)
+    }
+
+    fun loadMoreForFile(
+        query: String,
+        filter: SearchFilter,
+        fileUri: String,
+        offset: Int,
+        limit: Int = 200
+    ): List<SearchResult> {
+        return dbHelper.loadMoreForFile(query, resolveEffectiveFilter(filter), fileUri, offset, limit)
+    }
+
+    fun search(query: String, filter: SearchFilter = SearchFilter()): List<SearchResult> {
+        return dbHelper.search(query, resolveEffectiveFilter(filter))
     }
 
     suspend fun syncWorkspaces(

@@ -123,10 +123,15 @@ object DesktopValueInteractionHelper {
                 val rows = selectionState.selectedRows.values
                     .sortedWith(compareBy({ it.fileName }, { it.sheetName }, { it.key.rowIndex }))
                 if (rows.isEmpty()) return ""
-                if (!preferFormattedLabels && rows.none { it.isDocument }) {
-                    val distinctSheets = rows.map { it.key.fileUri to it.key.sheetName }.distinct()
-                    if (distinctSheets.size == 1) {
-                        return rows.joinToString("\n") { row -> row.cells.joinToString("\t") }
+                if (!preferFormattedLabels) {
+                    if (rows.all { it.isDocument }) {
+                        return rows.joinToString("\n") { it.snippet }
+                    }
+                    if (rows.none { it.isDocument }) {
+                        val distinctSheets = rows.map { it.key.fileUri to it.key.sheetName }.distinct()
+                        if (distinctSheets.size == 1) {
+                            return rows.joinToString("\n") { row -> row.cells.joinToString("\t") }
+                        }
                     }
                 }
                 formatMultipleRows(rows, verticalCopyFormat)

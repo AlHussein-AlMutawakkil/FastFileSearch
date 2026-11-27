@@ -1,9 +1,19 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package com.example.fastfilesearch.desktop.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.TooltipPlacement
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,33 +22,44 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -102,9 +123,11 @@ object DesktopDesignTokens {
         highlightFg = Color(0xFFFFE082)
     )
 
-    val CardCornerRadius: Dp = 14.dp
-    val SubCardCornerRadius: Dp = 10.dp
-    val ButtonCornerRadius: Dp = 10.dp
+    // Windows 11 / WinUI 3 Desktop Geometry
+    val CardCornerRadius: Dp = 8.dp
+    val SubCardCornerRadius: Dp = 6.dp
+    val ButtonCornerRadius: Dp = 6.dp
+    val ControlCornerRadius: Dp = 5.dp
     val DividerThickness: Dp = 1.dp
 }
 
@@ -175,21 +198,28 @@ fun DesktopPrimaryButton(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalDesktopColors.current
-    val bg = if (enabled) colors.controlActiveBackground else colors.controlActiveBackground.copy(alpha = 0.35f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val bg = when {
+        !enabled -> colors.controlActiveBackground.copy(alpha = 0.35f)
+        isHovered -> colors.controlActiveBackground.copy(alpha = 0.88f)
+        else -> colors.controlActiveBackground
+    }
     val fg = colors.controlActiveContent
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(DesktopDesignTokens.ButtonCornerRadius))
             .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            .hoverable(interactionSource, enabled = enabled)
+            .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
         }
-        Text(text = text, color = fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = text, color = fg, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
@@ -202,17 +232,25 @@ fun DesktopSecondaryButton(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val bg = when {
+        !enabled -> colors.subCardBackground.copy(alpha = 0.6f)
+        isHovered -> colors.divider.copy(alpha = if (colors.isDark) 0.55f else 0.45f)
+        else -> colors.subCardBackground
+    }
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(DesktopDesignTokens.ButtonCornerRadius))
-            .background(colors.subCardBackground)
+            .background(bg)
             .border(
                 DesktopDesignTokens.DividerThickness,
                 colors.divider,
                 RoundedCornerShape(DesktopDesignTokens.ButtonCornerRadius)
             )
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .hoverable(interactionSource, enabled = enabled)
+            .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -221,15 +259,321 @@ fun DesktopSecondaryButton(
                 icon,
                 contentDescription = null,
                 tint = if (enabled) colors.textPrimary else colors.textSecondary.copy(alpha = 0.5f),
-                modifier = Modifier.size(17.dp)
+                modifier = Modifier.size(16.dp)
             )
         }
         Text(
             text = text,
             color = if (enabled) colors.textPrimary else colors.textSecondary.copy(alpha = 0.5f),
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
         )
+    }
+}
+
+/**
+ * Flat WinUI 3 Command Bar button (used in top Explorer-style toolbar).
+ */
+@Composable
+fun FluentCommandButton(
+    text: String? = null,
+    icon: ImageVector,
+    tooltip: String? = null,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val bg = when {
+        !enabled -> Color.Transparent
+        active -> colors.controlActiveBackground
+        isHovered -> colors.subCardBackground
+        else -> Color.Transparent
+    }
+    val fg = when {
+        !enabled -> colors.textSecondary.copy(alpha = 0.45f)
+        active -> colors.controlActiveContent
+        else -> colors.textPrimary
+    }
+
+    val buttonContent: @Composable () -> Unit = {
+        Row(
+            modifier = modifier
+                .clip(RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+                .background(bg)
+                .then(
+                    if (active) {
+                        Modifier
+                    } else if (isHovered && enabled) {
+                        Modifier.border(1.dp, colors.divider, RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+                    } else {
+                        Modifier
+                    }
+                )
+                .hoverable(interactionSource, enabled = enabled)
+                .clickable(enabled = enabled, interactionSource = interactionSource, indication = null, onClick = onClick)
+                .padding(horizontal = if (text != null) 10.dp else 7.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(icon, contentDescription = tooltip ?: text, tint = fg, modifier = Modifier.size(16.dp))
+            if (!text.isNullOrBlank()) {
+                Text(text = text, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = fg, maxLines = 1)
+            }
+        }
+    }
+
+    if (!tooltip.isNullOrBlank()) {
+        FluentTooltip(text = tooltip, content = buttonContent)
+    } else {
+        buttonContent()
+    }
+}
+
+@Composable
+fun FluentTooltip(
+    text: String,
+    content: @Composable () -> Unit
+) {
+    val colors = LocalDesktopColors.current
+    TooltipArea(
+        tooltip = {
+            Surface(
+                color = colors.cardBackground,
+                shape = RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius),
+                shadowElevation = 4.dp,
+                modifier = Modifier.border(1.dp, colors.divider, RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+            ) {
+                Text(
+                    text = text,
+                    fontSize = 11.5.sp,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                )
+            }
+        },
+        delayMillis = 450,
+        tooltipPlacement = TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 18.dp)),
+        content = content
+    )
+}
+
+/**
+ * Authentic WinUI 3 capsule ToggleSwitch using the app's existing primary color.
+ */
+@Composable
+fun FluentToggleSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
+) {
+    val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    val trackColor by animateColorAsState(
+        targetValue = when {
+            checked && enabled -> colors.controlActiveBackground
+            checked && !enabled -> colors.controlActiveBackground.copy(alpha = 0.4f)
+            isHovered && enabled -> colors.divider
+            else -> colors.subCardBackground
+        }
+    )
+    val thumbColor by animateColorAsState(
+        targetValue = if (checked) colors.controlActiveContent else colors.textSecondary
+    )
+    val thumbOffset by animateDpAsState(targetValue = if (checked) 20.dp else 4.dp)
+    val thumbSize by animateDpAsState(targetValue = if (isHovered && enabled) 14.dp else 12.dp)
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+            .hoverable(interactionSource, enabled = enabled)
+            .clickable(enabled = enabled, interactionSource = interactionSource, indication = null) {
+                onCheckedChange(!checked)
+            }
+            .padding(2.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(20.dp)
+                .clip(CircleShape)
+                .background(trackColor)
+                .then(
+                    if (!checked) {
+                        Modifier.border(1.dp, colors.textSecondary.copy(alpha = 0.55f), CircleShape)
+                    } else {
+                        Modifier
+                    }
+                ),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = thumbOffset)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(thumbColor)
+            )
+        }
+    }
+}
+
+/**
+ * WinUI 3 TextBox with subtle 1dp frame and 2dp bottom focus accent line using existing primary color.
+ */
+@Composable
+fun FluentTextBox(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    fieldModifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+    enabled: Boolean = true,
+    isError: Boolean = false,
+    textStyle: TextStyle? = null,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    leadingContent: (@Composable () -> Unit)? = null,
+    trailingContent: (@Composable () -> Unit)? = null
+) {
+    val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    val effectiveStyle = textStyle ?: TextStyle(color = colors.textPrimary, fontSize = 13.5.sp)
+    val bottomBarColor = when {
+        isError -> colors.dangerText
+        isFocused -> colors.controlActiveBackground
+        else -> colors.divider
+    }
+    val bottomBarThickness = if (isFocused || isError) 2.dp else 1.dp
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+            .background(
+                if (isFocused) colors.cardBackground
+                else if (isHovered) colors.cardBackground
+                else colors.subCardBackground
+            )
+            .border(1.dp, colors.divider, RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+            .hoverable(interactionSource, enabled = enabled)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 11.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (leadingContent != null) leadingContent()
+
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = singleLine,
+                enabled = enabled,
+                interactionSource = interactionSource,
+                visualTransformation = visualTransformation,
+                textStyle = effectiveStyle,
+                cursorBrush = SolidColor(colors.controlActiveBackground),
+                modifier = Modifier.weight(1f).then(fieldModifier),
+                decorationBox = { inner ->
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = colors.textSecondary.copy(alpha = 0.7f),
+                            fontSize = effectiveStyle.fontSize,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    inner()
+                }
+            )
+
+            if (trailingContent != null) trailingContent()
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(bottomBarThickness)
+                .background(bottomBarColor)
+        )
+    }
+}
+
+/**
+ * Windows 11 Settings horizontal card row.
+ */
+@Composable
+fun FluentSettingRow(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable () -> Unit
+) {
+    val colors = LocalDesktopColors.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val bg = if (onClick != null && isHovered) {
+        colors.subCardBackground.copy(alpha = 0.75f)
+    } else {
+        colors.cardBackground
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bg)
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .hoverable(interactionSource)
+                        .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f).padding(end = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(DesktopDesignTokens.ControlCornerRadius))
+                        .background(colors.subCardBackground),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = colors.textPrimary, modifier = Modifier.size(18.dp))
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(text = title, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, color = colors.textPrimary)
+                if (!subtitle.isNullOrBlank()) {
+                    Text(text = subtitle, fontSize = 12.sp, color = colors.textSecondary)
+                }
+            }
+        }
+        trailing()
     }
 }
 
@@ -247,9 +591,9 @@ fun DesktopR2CodeBox(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(DesktopDesignTokens.SubCardCornerRadius))
                 .background(colors.subCardBackground)
-                .border(1.dp, colors.divider, RoundedCornerShape(8.dp))
+                .border(1.dp, colors.divider, RoundedCornerShape(DesktopDesignTokens.SubCardCornerRadius))
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {

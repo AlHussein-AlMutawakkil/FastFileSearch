@@ -8,15 +8,21 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import com.example.fastfilesearch.desktop.model.FileResultGroup
 import com.example.fastfilesearch.desktop.model.FilteredFileType
+import com.example.fastfilesearch.desktop.model.IndexedFileRecord
 import com.example.fastfilesearch.desktop.model.SearchMethod
 import com.example.fastfilesearch.desktop.model.SearchResult
+import com.example.fastfilesearch.desktop.model.SupportedFileTypeGroups
 import com.example.fastfilesearch.desktop.parser.DesktopFileParserDispatcher
 import com.example.fastfilesearch.desktop.ui.selection.RowKey
 import com.example.fastfilesearch.desktop.ui.selection.SelectedRowData
@@ -30,6 +36,15 @@ data class DesktopFileTypeVisual(
     val color: Color,
     val typeName: String
 )
+
+fun LayoutCoordinates.unclippedBoundsInRoot(): Rect? {
+    if (!isAttached) return null
+    val w = size.width.toFloat()
+    val h = size.height.toFloat()
+    if (w <= 0f || h <= 0f) return null
+    val pos = positionInRoot()
+    return Rect(pos.x, pos.y, pos.x + w, pos.y + h)
+}
 
 object DesktopFileTypeHelper {
 
@@ -99,6 +114,59 @@ object DesktopFileTypeHelper {
     }
 }
 
+data class VisibleFileTypeChip(
+    val group: FilteredFileType,
+    val count: Int
+)
+
+/**
+ * Resolves which file-format filter pills are actually present (> 0 count or currently selected)
+ * so empty format pills stay hidden.
+ */
+object DesktopFormatFilterHelper {
+
+    fun resolveVisibleGroups(
+        typeCounts: Map<String, Int>,
+        selectedExtensions: Set<String> = emptySet()
+    ): List<VisibleFileTypeChip> {
+        val normalizedCounts = typeCounts.entries.associate { (k, v) -> k.lowercase().trim() to v }
+        val normalizedSelected = selectedExtensions.map { it.lowercase().trim() }.toSet()
+        return SupportedFileTypeGroups.ALL_GROUPS.mapNotNull { group ->
+            val extCount = group.extensions.sumOf { ext -> normalizedCounts[ext.lowercase()] ?: 0 }
+            val idCount = normalizedCounts[group.id.lowercase()] ?: 0
+            val count = maxOf(extCount, idCount)
+            val isSelected = group.extensions.any { it.lowercase() in normalizedSelected }
+            if (count > 0 || isSelected) {
+                VisibleFileTypeChip(group = group, count = count)
+            } else {
+                null
+            }
+        }
+    }
+
+    fun deriveTypeCountsFromFiles(files: List<IndexedFileRecord>): Map<String, Int> {
+        val map = mutableMapOf<String, Int>()
+        files.forEach { rec ->
+            val ext = rec.fileType.ifBlank { rec.fileName.substringAfterLast('.', "") }.lowercase().trim()
+            if (ext.isNotEmpty()) {
+                map[ext] = (map[ext] ?: 0) + 1
+            }
+        }
+        return map
+    }
+
+    fun deriveTypeCountsFromResults(groups: List<FileResultGroup>): Map<String, Int> {
+        val map = mutableMapOf<String, Int>()
+        groups.forEach { grp ->
+            val ext = grp.fileName.substringAfterLast('.', "").lowercase().trim()
+            if (ext.isNotEmpty()) {
+                map[ext] = (map[ext] ?: 0) + grp.totalMatchesCount.coerceAtLeast(grp.results.size)
+            }
+        }
+        return map
+    }
+}
+
 object DesktopTableCellHelper {
 
     private val WHITESPACE_REGEX = "\\s+".toRegex()
@@ -131,6 +199,26 @@ object DesktopTableCellHelper {
     ): List<SelectedRowData> {
         if (results.isEmpty()) return emptyList()
         if (isDocument) {
+            if (isDocumentType(fileName)) {
+                val mergedText = results
+                    .mapNotNull { it.snippet.trim().takeIf { s -> s.isNotEmpty() } }
+                    .joinToString(" ")
+                    .replace(WHITESPACE_REGEX, " ")
+                    .trim()
+                return listOf(
+                    SelectedRowData(
+                        key = RowKey(fileUri = fileUri, sheetName = "مستند", rowIndex = 0),
+                        fileName = fileName,
+                        sheetName = "مستند",
+                        rowNumber = "1",
+                        cells = emptyList(),
+                        headers = emptyList(),
+                        isDocument = true,
+                        snippet = mergedText,
+                        location = ""
+                    )
+                )
+            }
             return results.mapIndexed { idx, res ->
                 SelectedRowData(
                     key = RowKey(fileUri = fileUri, sheetName = "مستند", rowIndex = idx),
