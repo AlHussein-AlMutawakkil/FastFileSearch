@@ -33,7 +33,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
             packageName = "SafeSearch"
-            packageVersion = "5.0.0"
+            packageVersion = "6.0.0"
             description = "بحث آمن - محرك بحث ومفهرس ملفات محلي لسطح المكتب"
             vendor = "FastFileSearch"
             includeAllModules = true

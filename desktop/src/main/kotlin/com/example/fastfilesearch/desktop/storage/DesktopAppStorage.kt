@@ -26,11 +26,6 @@ object DesktopAppStorage {
         return File(baseDir, "index.db")
     }
 
-    fun getLicenseFile(baseDir: File = defaultAppDataDir()): File {
-        baseDir.mkdirs()
-        return File(baseDir, "license.properties")
-    }
-
     fun getSettingsFile(baseDir: File = defaultAppDataDir()): File {
         baseDir.mkdirs()
         return File(baseDir, "settings.properties")

@@ -42,7 +42,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -74,8 +73,6 @@ import com.example.fastfilesearch.desktop.engine.DesktopFolderWatcher
 import com.example.fastfilesearch.desktop.engine.DesktopSearchEngine
 import com.example.fastfilesearch.desktop.licensing.DesktopAppLockManager
 import com.example.fastfilesearch.desktop.licensing.DesktopAppLockMode
-import com.example.fastfilesearch.desktop.licensing.DesktopLicenseManager
-import com.example.fastfilesearch.desktop.licensing.LicenseStatus
 import com.example.fastfilesearch.desktop.model.DesktopSearchResponse
 import com.example.fastfilesearch.desktop.model.IndexProgress
 import com.example.fastfilesearch.desktop.model.SearchFilter
@@ -83,7 +80,6 @@ import com.example.fastfilesearch.desktop.model.SearchMethod
 import com.example.fastfilesearch.desktop.model.SearchResult
 import com.example.fastfilesearch.desktop.model.Workspace
 import com.example.fastfilesearch.desktop.ui.DesktopAboutScreen
-import com.example.fastfilesearch.desktop.ui.DesktopActivationScreen
 import com.example.fastfilesearch.desktop.ui.DesktopDesignTokens
 import com.example.fastfilesearch.desktop.ui.DesktopHelpScreen
 import com.example.fastfilesearch.desktop.ui.DesktopLockScreen
@@ -109,7 +105,7 @@ import javax.swing.UIManager
 private enum class DesktopTab(val title: String, val icon: ImageVector) {
     SEARCH("البحث", Icons.Outlined.Search),
     WORKSPACES("المجلدات", Icons.Outlined.FolderOpen),
-    SETTINGS("الإعدادات والترخيص", Icons.Outlined.Settings),
+    SETTINGS("الإعدادات", Icons.Outlined.Settings),
     HELP("المساعدة", Icons.AutoMirrored.Outlined.HelpOutline),
     ABOUT("حول التطبيق", Icons.Outlined.Info)
 }
@@ -144,7 +140,6 @@ fun main() {
 
 @Composable
 private fun SafeSearchDesktopApp() {
-    val licenseManager = remember { DesktopLicenseManager() }
     val appLockManager = remember { DesktopAppLockManager() }
     val searchEngine = remember { DesktopSearchEngine() }
 
@@ -152,8 +147,6 @@ private fun SafeSearchDesktopApp() {
         onDispose { searchEngine.close() }
     }
 
-    var licenseVersion by remember { mutableIntStateOf(0) }
-    val licenseStatus = remember(licenseVersion) { licenseManager.getLicenseStatus() }
     val isLocked by appLockManager.isLocked.collectAsState()
     val lockMode by appLockManager.lockModeFlow.collectAsState()
     val autoLockTimeout by appLockManager.autoLockTimeoutFlow.collectAsState()
@@ -171,8 +164,8 @@ private fun SafeSearchDesktopApp() {
     }
 
     // Idle auto-lock check
-    LaunchedEffect(licenseStatus, lockMode, autoLockTimeout, isLocked) {
-        if (licenseStatus == LicenseStatus.ACTIVE && lockMode != DesktopAppLockMode.DISABLED && !isLocked) {
+    LaunchedEffect(lockMode, autoLockTimeout, isLocked) {
+        if (lockMode != DesktopAppLockMode.DISABLED && !isLocked) {
             while (isActive) {
                 delay(5000L)
                 appLockManager.checkIdleTimeout()
@@ -189,88 +182,76 @@ private fun SafeSearchDesktopApp() {
     }
 
     ProvideDesktopTheme(isDark = isDark) {
-        when {
-            licenseStatus != LicenseStatus.ACTIVE -> {
-                DesktopActivationScreen(
-                    licenseManager = licenseManager,
-                    onActivated = { licenseVersion++ }
-                )
-            }
-            isLocked -> {
-                DesktopLockScreen(
-                    lockManager = appLockManager,
-                    onUnlocked = { appLockManager.recordUserActivity() }
-                )
-            }
-            else -> {
-                DesktopMainShell(
-                    licenseManager = licenseManager,
-                    appLockManager = appLockManager,
-                    searchEngine = searchEngine,
-                    themeMode = themeMode,
-                    defaultSearchMethod = defaultSearchMethod,
-                    showAllRows = showAllRows,
-                    stretchSingleColumn = stretchSingleColumn,
-                    verticalCopyFormat = verticalCopyFormat,
-                    expandFullCellText = expandFullCellText,
-                    backgroundSyncEnabled = backgroundSyncEnabled,
-                    searchHistoryEnabled = searchHistoryEnabled,
-                    searchHistory = searchHistory,
-                    onThemeChanged = { newTheme ->
-                        themeMode = newTheme
-                        searchEngine.setThemeMode(newTheme)
-                    },
-                    onDefaultMethodChanged = { newMethod ->
-                        defaultSearchMethod = newMethod
-                        searchEngine.setDefaultSearchMethod(newMethod)
-                    },
-                    onShowAllRowsChanged = { enabled ->
-                        showAllRows = enabled
-                        searchEngine.setShowAllRows(enabled)
-                    },
-                    onStretchSingleColumnChanged = { enabled ->
-                        stretchSingleColumn = enabled
-                        searchEngine.setStretchSingleColumn(enabled)
-                    },
-                    onVerticalCopyFormatChanged = { enabled ->
-                        verticalCopyFormat = enabled
-                        searchEngine.setVerticalCopyFormat(enabled)
-                    },
-                    onExpandFullCellTextChanged = { enabled ->
-                        expandFullCellText = enabled
-                        searchEngine.setExpandFullCellText(enabled)
-                    },
-                    onBackgroundSyncChanged = { enabled ->
-                        backgroundSyncEnabled = enabled
-                        searchEngine.setBackgroundSyncEnabled(enabled)
-                    },
-                    onSearchHistoryEnabledChanged = { enabled ->
-                        searchHistoryEnabled = enabled
-                        searchEngine.setSearchHistoryEnabled(enabled)
-                        searchHistory = if (enabled) searchEngine.getSearchHistory() else emptyList()
-                    },
-                    onRecordHistory = { q, minLen ->
-                        if (searchHistoryEnabled) {
-                            searchHistory = searchEngine.addSearchHistory(q, minLength = minLen)
-                        }
-                    },
-                    onRemoveHistoryItem = { q ->
-                        searchHistory = searchEngine.removeSearchHistoryItem(q)
-                    },
-                    onClearSearchHistory = {
-                        searchEngine.clearSearchHistory()
-                        searchHistory = emptyList()
-                    },
-                    onLicenseUpdated = { licenseVersion++ }
-                )
-            }
+        if (isLocked) {
+            DesktopLockScreen(
+                lockManager = appLockManager,
+                onUnlocked = { appLockManager.recordUserActivity() }
+            )
+        } else {
+            DesktopMainShell(
+                appLockManager = appLockManager,
+                searchEngine = searchEngine,
+                themeMode = themeMode,
+                defaultSearchMethod = defaultSearchMethod,
+                showAllRows = showAllRows,
+                stretchSingleColumn = stretchSingleColumn,
+                verticalCopyFormat = verticalCopyFormat,
+                expandFullCellText = expandFullCellText,
+                backgroundSyncEnabled = backgroundSyncEnabled,
+                searchHistoryEnabled = searchHistoryEnabled,
+                searchHistory = searchHistory,
+                onThemeChanged = { newTheme ->
+                    themeMode = newTheme
+                    searchEngine.setThemeMode(newTheme)
+                },
+                onDefaultMethodChanged = { newMethod ->
+                    defaultSearchMethod = newMethod
+                    searchEngine.setDefaultSearchMethod(newMethod)
+                },
+                onShowAllRowsChanged = { enabled ->
+                    showAllRows = enabled
+                    searchEngine.setShowAllRows(enabled)
+                },
+                onStretchSingleColumnChanged = { enabled ->
+                    stretchSingleColumn = enabled
+                    searchEngine.setStretchSingleColumn(enabled)
+                },
+                onVerticalCopyFormatChanged = { enabled ->
+                    verticalCopyFormat = enabled
+                    searchEngine.setVerticalCopyFormat(enabled)
+                },
+                onExpandFullCellTextChanged = { enabled ->
+                    expandFullCellText = enabled
+                    searchEngine.setExpandFullCellText(enabled)
+                },
+                onBackgroundSyncChanged = { enabled ->
+                    backgroundSyncEnabled = enabled
+                    searchEngine.setBackgroundSyncEnabled(enabled)
+                },
+                onSearchHistoryEnabledChanged = { enabled ->
+                    searchHistoryEnabled = enabled
+                    searchEngine.setSearchHistoryEnabled(enabled)
+                    searchHistory = if (enabled) searchEngine.getSearchHistory() else emptyList()
+                },
+                onRecordHistory = { q, minLen ->
+                    if (searchHistoryEnabled) {
+                        searchHistory = searchEngine.addSearchHistory(q, minLength = minLen)
+                    }
+                },
+                onRemoveHistoryItem = { q ->
+                    searchHistory = searchEngine.removeSearchHistoryItem(q)
+                },
+                onClearSearchHistory = {
+                    searchEngine.clearSearchHistory()
+                    searchHistory = emptyList()
+                }
+            )
         }
     }
 }
 
 @Composable
 private fun DesktopMainShell(
-    licenseManager: DesktopLicenseManager,
     appLockManager: DesktopAppLockManager,
     searchEngine: DesktopSearchEngine,
     themeMode: String,
@@ -292,8 +273,7 @@ private fun DesktopMainShell(
     onSearchHistoryEnabledChanged: (Boolean) -> Unit,
     onRecordHistory: (String, Int) -> Unit,
     onRemoveHistoryItem: (String) -> Unit,
-    onClearSearchHistory: () -> Unit,
-    onLicenseUpdated: () -> Unit
+    onClearSearchHistory: () -> Unit
 ) {
     val colors = LocalDesktopColors.current
     val scope = rememberCoroutineScope()
@@ -380,8 +360,7 @@ private fun DesktopMainShell(
         onDispose { folderWatcher.close() }
     }
     LaunchedEffect(workspaces, backgroundSyncEnabled) {
-        val activeSync = backgroundSyncEnabled && licenseManager.canUseBackgroundSync()
-        folderWatcher.updateWatchedWorkspaces(workspaces, activeSync)
+        folderWatcher.updateWatchedWorkspaces(workspaces, backgroundSyncEnabled)
     }
 
     // Startup differential sync if workspaces exist
@@ -450,7 +429,7 @@ private fun DesktopMainShell(
     }
     var selectionSummary by remember { mutableStateOf<String?>(null) }
     var resultsSummary by remember { mutableStateOf(0 to 0) }
-    val watcherActive = backgroundSyncEnabled && licenseManager.canUseBackgroundSync() && workspaces.isNotEmpty()
+    val watcherActive = backgroundSyncEnabled && workspaces.isNotEmpty()
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isCompactWidth = maxWidth < 1100.dp
@@ -619,7 +598,6 @@ private fun DesktopMainShell(
                             indexProgress = indexProgress,
                             filesCount = stats.first,
                             segmentsCount = stats.second,
-                            canExportExcel = licenseManager.canExportExcel(),
                             showAllRows = showAllRows,
                             stretchSingleColumn = stretchSingleColumn,
                             verticalCopyFormat = verticalCopyFormat,
@@ -693,11 +671,9 @@ private fun DesktopMainShell(
                     }
 
                     DesktopTab.WORKSPACES -> {
-                        val activePayload = licenseManager.getActivePayload()
                         DesktopWorkspacesScreen(
                             workspaces = workspaces,
                             activeWorkspaceId = activeWorkspaceId,
-                            maxFoldersAllowed = activePayload?.maxWorkspaces ?: 0,
                             indexProgress = indexProgress,
                             filesCount = stats.first,
                             segmentsCount = stats.second,
@@ -708,10 +684,6 @@ private fun DesktopMainShell(
                                 refreshMetadata()
                             },
                             onAddFolderClick = {
-                                if (!licenseManager.canAddWorkspace(workspaces.size)) {
-                                    workspaceBanner = "تم بلوغ الحد الأقصى للمجلدات المسموح بها في الترخيص الحالي."
-                                    return@DesktopWorkspacesScreen
-                                }
                                 val picked = DesktopSystemActions.pickFolder()
                                 if (picked != null && picked.isDirectory) {
                                     val added = searchEngine.addWorkspace(picked)
@@ -742,7 +714,6 @@ private fun DesktopMainShell(
 
                     DesktopTab.SETTINGS -> {
                         DesktopSettingsScreen(
-                            licenseManager = licenseManager,
                             appLockManager = appLockManager,
                             themeMode = themeMode,
                             defaultSearchMethod = defaultSearchMethod,
@@ -765,8 +736,7 @@ private fun DesktopMainShell(
                             onToggleBackgroundSync = onBackgroundSyncChanged,
                             onToggleSearchHistory = onSearchHistoryEnabledChanged,
                             onClearSearchHistory = onClearSearchHistory,
-                            onOpenAbout = { currentTab = DesktopTab.ABOUT },
-                            onLicenseUpdated = onLicenseUpdated
+                            onOpenAbout = { currentTab = DesktopTab.ABOUT }
                         )
                     }
 

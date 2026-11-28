@@ -55,7 +55,6 @@ import com.example.fastfilesearch.desktop.model.Workspace
 fun DesktopWorkspacesScreen(
     workspaces: List<Workspace>,
     activeWorkspaceId: String? = null,
-    maxFoldersAllowed: Int,
     indexProgress: IndexProgress,
     filesCount: Int,
     segmentsCount: Int,
@@ -68,7 +67,6 @@ fun DesktopWorkspacesScreen(
     onCancelIndexing: () -> Unit
 ) {
     val colors = LocalDesktopColors.current
-    val limitText = if (maxFoldersAllowed <= 0) "غير محدود" else "${workspaces.size} / $maxFoldersAllowed مجلد"
 
     var workspaceToRename by remember { mutableStateOf<Workspace?>(null) }
     var renameInput by remember { mutableStateOf("") }
@@ -94,7 +92,7 @@ fun DesktopWorkspacesScreen(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = "$filesCount ملف مفهرس • $segmentsCount مقطع • الحد المسموح: $limitText",
+                    text = "$filesCount ملف مفهرس • $segmentsCount مقطع",
                     fontSize = 13.sp,
                     color = colors.textSecondary
                 )

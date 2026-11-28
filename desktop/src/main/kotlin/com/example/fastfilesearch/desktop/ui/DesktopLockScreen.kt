@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
@@ -100,25 +99,21 @@ fun DesktopLockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Icon(
-                imageVector = Icons.Outlined.Lock,
-                contentDescription = "قفل التطبيق",
-                tint = colors.textPrimary,
-                modifier = Modifier.size(52.dp)
-            )
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = DesktopDesignTokens.AppLogo,
+                    contentDescription = "شعار البرنامج",
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(68.dp)
+                )
                 Text(
                     text = "بحث آمن",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "التطبيق مقفل بكلمة مرور",
-                    fontSize = 14.sp,
-                    color = colors.textSecondary
                 )
             }
 

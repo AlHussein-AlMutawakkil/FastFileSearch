@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -35,7 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,32 +42,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.fastfilesearch.desktop.licensing.DesktopAppLockManager
 import com.example.fastfilesearch.desktop.licensing.DesktopAppLockMode
 import com.example.fastfilesearch.desktop.licensing.DesktopAutoLockTimeout
-import com.example.fastfilesearch.desktop.licensing.DesktopLicenseManager
-import com.example.fastfilesearch.desktop.licensing.LicenseStatus
-import com.example.fastfilesearch.desktop.licensing.WindowsDeviceIdProvider
 import com.example.fastfilesearch.desktop.model.SearchMethod
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DesktopSettingsScreen(
-    licenseManager: DesktopLicenseManager,
     appLockManager: DesktopAppLockManager,
     themeMode: String,
     defaultSearchMethod: SearchMethod,
@@ -89,46 +76,18 @@ fun DesktopSettingsScreen(
     onToggleBackgroundSync: (Boolean) -> Unit,
     onToggleSearchHistory: (Boolean) -> Unit,
     onClearSearchHistory: () -> Unit,
-    onOpenAbout: () -> Unit,
-    onLicenseUpdated: () -> Unit
+    onOpenAbout: () -> Unit
 ) {
     val colors = LocalDesktopColors.current
-    val r2Code = remember { licenseManager.buildR2ActivationRequest() }
-    val status = licenseManager.getLicenseStatus()
-    val payload = licenseManager.getActivePayload()
 
     val currentLockMode by appLockManager.lockModeFlow.collectAsState()
     val currentTimeout by appLockManager.autoLockTimeoutFlow.collectAsState()
 
     var statusToast by remember { mutableStateOf<String?>(null) }
-    var showRenewDialog by remember { mutableStateOf(false) }
     var showSetPasscodeDialog by remember { mutableStateOf(false) }
     var targetLockModeAfterSet by remember { mutableStateOf<DesktopAppLockMode?>(null) }
     var showVerifyPasscodeDialog by remember { mutableStateOf(false) }
     var pendingVerifiedAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    val statusText = when (status) {
-        LicenseStatus.ACTIVE -> "نشط"
-        LicenseStatus.EXPIRED -> "منتهي الصلاحية"
-        LicenseStatus.CLOCK_TAMPERED -> "خلل في ساعة النظام"
-        LicenseStatus.NOT_ACTIVATED -> "غير مفعّل"
-        LicenseStatus.INVALID -> "غير صالح"
-    }
-
-    val validityText = remember(payload) {
-        if (payload == null) {
-            "—"
-        } else if (payload.isPermanent) {
-            "دائم (بلا انتهاء)"
-        } else {
-            val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.US)
-            val dateStr = sdf.format(Date(payload.exp * 1000L))
-            val daysLeft = ((payload.exp * 1000L - System.currentTimeMillis()) / 86_400_000L)
-                .toInt()
-                .coerceAtLeast(0)
-            "$dateStr (متبقي $daysLeft يوماً)"
-        }
-    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -160,54 +119,7 @@ fun DesktopSettingsScreen(
             }
         }
 
-        // Card 1: Unified R2 Device Code & License Details
-        DesktopSectionCard {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "معرّف الجهاز (R2)",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.textPrimary
-                )
-                DesktopR2CodeBox(
-                    r2Code = r2Code,
-                    onCopied = { statusToast = "تم نسخ معرّف الجهاز R2 إلى الحافظة." }
-                )
-
-                HorizontalDivider(color = colors.divider, thickness = 1.dp)
-
-                InfoRow(title = "حالة الترخيص", value = statusText)
-                InfoRow(title = "صلاحية الترخيص", value = validityText)
-                InfoRow(
-                    title = "الحد الأقصى للمجلدات",
-                    value = if (payload == null || payload.maxWorkspaces <= 0) "غير محدود" else "${payload.maxWorkspaces} مجلدات"
-                )
-                InfoRow(
-                    title = "تصدير Excel (.xlsx)",
-                    value = if (payload?.allowExcelExport == true) "مفعّل" else "غير مفعّل"
-                )
-                InfoRow(
-                    title = "قفل التطبيق بكلمة مرور",
-                    value = if (payload?.allowAppLock == true) "مفعّل" else "غير مفعّل"
-                )
-                InfoRow(
-                    title = "المزامنة التلقائية بالخلفية",
-                    value = if (payload?.allowAccess == true) "مفعّل" else "غير مفعّل"
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-                DesktopSecondaryButton(
-                    text = "تحديث أو تجديد كود التفعيل",
-                    icon = Icons.Outlined.Key,
-                    onClick = { showRenewDialog = true }
-                )
-            }
-        }
-
-        // Card 2: Security (App Lock), Auto-Sync, & Search History
+        // Security (App Lock), Auto-Sync, & Search History
         DesktopSectionCard {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -224,13 +136,7 @@ fun DesktopSettingsScreen(
                     title = "المزامنة التلقائية ومراقبة المجلدات",
                     subtitle = "فهرسة التغييرات تلقائياً أثناء تشغيل التطبيق",
                     checked = backgroundSyncEnabled,
-                    onToggle = { enabled ->
-                        if (enabled && !licenseManager.canUseBackgroundSync()) {
-                            statusToast = "ميزة المزامنة التلقائية غير مفعّلة في الترخيص الحالي."
-                        } else {
-                            onToggleBackgroundSync(enabled)
-                        }
-                    }
+                    onToggle = onToggleBackgroundSync
                 )
 
                 HorizontalDivider(color = colors.divider, thickness = 1.dp)
@@ -280,9 +186,7 @@ fun DesktopSettingsScreen(
                                         appLockManager.setLockMode(DesktopAppLockMode.DISABLED)
                                     }
                                 } else {
-                                    if (!licenseManager.canUseAppLock()) {
-                                        statusToast = "ميزة قفل التطبيق غير مفعّلة في الترخيص الحالي."
-                                    } else if (!appLockManager.hasPasscode()) {
+                                    if (!appLockManager.hasPasscode()) {
                                         targetLockModeAfterSet = mode
                                         showSetPasscodeDialog = true
                                     } else {
@@ -446,7 +350,7 @@ fun DesktopSettingsScreen(
                 InfoRow("JSON", ".json")
                 InfoRow("Markdown", ".md")
                 HorizontalDivider(color = colors.divider, thickness = 1.dp)
-                InfoRow("إصدار سطح المكتب", "بحث آمن ${WindowsDeviceIdProvider.DESKTOP_APP_VERSION}")
+                InfoRow("إصدار سطح المكتب", "بحث آمن ${DesktopDesignTokens.DESKTOP_APP_VERSION}")
                 Spacer(modifier = Modifier.height(4.dp))
                 DesktopSecondaryButton(
                     text = "حول التطبيق والتواصل والسياسات",
@@ -455,72 +359,6 @@ fun DesktopSettingsScreen(
                 )
             }
         }
-        }
-    }
-
-    if (showRenewDialog) {
-        var newCode by remember { mutableStateOf("") }
-        var renewErr by remember { mutableStateOf<String?>(null) }
-
-        Dialog(onDismissRequest = { showRenewDialog = false }) {
-            DesktopSectionCard(modifier = Modifier.width(440.dp)) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "تحديث كود الترخيص",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        FluentTextBox(
-                            value = newCode,
-                            onValueChange = {
-                                newCode = it
-                                renewErr = null
-                            },
-                            placeholder = "XXXX-XXXX-XXXX-XXXX",
-                            isError = renewErr != null,
-                            textStyle = TextStyle(
-                                color = colors.textPrimary,
-                                fontFamily = FontFamily.Monospace,
-                                fontSize = 14.sp,
-                                textAlign = TextAlign.Center
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    renewErr?.let { err ->
-                        Text(text = err, color = colors.dangerText, fontSize = 13.sp)
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        DesktopPrimaryButton(
-                            text = "تفعيل",
-                            enabled = newCode.isNotBlank(),
-                            onClick = {
-                                val res = licenseManager.activateLicense(newCode)
-                                if (res.status == LicenseStatus.ACTIVE) {
-                                    showRenewDialog = false
-                                    statusToast = "تم تحديث كود التفعيل بنجاح."
-                                    onLicenseUpdated()
-                                } else {
-                                    renewErr = res.errorMessage ?: "كود غير صالح"
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        DesktopSecondaryButton(
-                            text = "إلغاء",
-                            onClick = { showRenewDialog = false },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
         }
     }
 

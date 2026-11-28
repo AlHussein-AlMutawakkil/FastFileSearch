@@ -51,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -91,6 +92,23 @@ data class DesktopColors(
 )
 
 object DesktopDesignTokens {
+    const val DESKTOP_APP_VERSION = "6.0.0"
+
+    val AppLogo: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "SafeSearchLogo",
+            defaultWidth = 48.dp,
+            defaultHeight = 48.dp,
+            viewportWidth = 48f,
+            viewportHeight = 48f
+        ).addPath(
+            pathData = PathParser().parsePathString(
+                "M24,44q-7,-1.75 -11.5,-8.13T8,21.9V10L24,4l16,6V21.9q0,3.9 -1.07,7.73t-3.78,7.13l-7,-6.7q-0.95,0.55 -2.01,0.9T24,31.3q-3.1,0 -5.27,-2.15t-2.18,-5.27t2.18,-5.3T24,16.4t5.28,2.18t2.18,5.32q0,1.05 -0.3,2.1T30.2,27.9l4.4,4.2q1.2,-2.15 1.8,-4.83T37,21.9V11.98L24,7.25L11,11.98V21.9q0,6.55 3.63,11.83t9.39,7.17q1.44,-0.4 3.51,-1.65t3.27,-2.4L32.9,39q-1.75,1.6 -4.17,3.02T24,44Zm3.15,-16.98q1.3,-1.27 1.3,-3.15T27.14,20.7t-3.15,-1.3t-3.14,1.3t-1.3,3.18t1.31,3.15t3.15,1.27t3.14,-1.27Zm-3.2,-3.23Z"
+            ).toNodes(),
+            fill = SolidColor(Color.White)
+        ).build()
+    }
+
     val LightColors = DesktopColors(
         isDark = false,
         screenBackground = Color(0xFFF5F6F8),
@@ -574,58 +592,6 @@ fun FluentSettingRow(
             }
         }
         trailing()
-    }
-}
-
-/**
- * Displays unified R2 code on a single LTR monospace line with Copy button underneath.
- */
-@Composable
-fun DesktopR2CodeBox(
-    r2Code: String,
-    onCopied: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val colors = LocalDesktopColors.current
-    Column(modifier = modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(DesktopDesignTokens.SubCardCornerRadius))
-                .background(colors.subCardBackground)
-                .border(1.dp, colors.divider, RoundedCornerShape(DesktopDesignTokens.SubCardCornerRadius))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                SelectionContainer {
-                    Text(
-                        text = r2Code,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        softWrap = false,
-                        textAlign = TextAlign.Center,
-                        color = colors.textPrimary,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        DesktopSecondaryButton(
-            text = "نسخ كود الطلب R2",
-            icon = Icons.Outlined.ContentCopy,
-            onClick = {
-                DesktopSystemActions.copyToClipboard(r2Code)
-                onCopied()
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
     }
 }
 

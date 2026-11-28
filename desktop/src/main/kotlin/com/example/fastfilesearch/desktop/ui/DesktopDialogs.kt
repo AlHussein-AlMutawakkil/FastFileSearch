@@ -58,7 +58,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.example.fastfilesearch.desktop.licensing.WindowsDeviceIdProvider
 import com.example.fastfilesearch.desktop.model.IndexedFileRecord
 import com.example.fastfilesearch.desktop.model.SearchFilter
 import com.example.fastfilesearch.desktop.model.SearchMethod
@@ -984,7 +983,7 @@ fun DesktopAboutScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("إصدار التطبيق", fontSize = 13.sp, color = colors.textSecondary)
-                    Text(WindowsDeviceIdProvider.DESKTOP_APP_VERSION, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
+                    Text(DesktopDesignTokens.DESKTOP_APP_VERSION, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.textPrimary)
                 }
             }
         }

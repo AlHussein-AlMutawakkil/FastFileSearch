@@ -47,9 +47,12 @@ import com.example.fastfilesearch.desktop.ui.ColumnTextFilter
 import com.example.fastfilesearch.desktop.ui.DesktopColors
 import com.example.fastfilesearch.desktop.ui.DesktopExcelTableSection
 import com.example.fastfilesearch.desktop.ui.DesktopFormatFilterHelper
+import com.example.fastfilesearch.desktop.ui.DesktopLockScreen
 import com.example.fastfilesearch.desktop.ui.DesktopSearchScreen
+import com.example.fastfilesearch.desktop.ui.DesktopSettingsScreen
 import com.example.fastfilesearch.desktop.ui.DesktopTableCellHelper
 import com.example.fastfilesearch.desktop.ui.DesktopTableSortFilterHelper
+import com.example.fastfilesearch.desktop.ui.DesktopWorkspacesScreen
 import com.example.fastfilesearch.desktop.ui.unclippedBoundsInRoot
 import com.example.fastfilesearch.desktop.ui.FluentToggleSwitch
 import com.example.fastfilesearch.desktop.ui.LocalDesktopColors
@@ -605,7 +608,6 @@ class DesktopParityAndSelectionTest {
                         indexProgress = IndexProgress(),
                         filesCount = 1,
                         segmentsCount = 2,
-                        canExportExcel = true,
                         showAllRows = false,
                         stretchSingleColumn = true,
                         verticalCopyFormat = true,
@@ -1406,5 +1408,107 @@ class DesktopParityAndSelectionTest {
         assertEquals(CellKey("C:/docs/f2.xlsx", "و1", 0, 1), cellSel.activeCell)
         cellSel = DesktopGridNavigator.navigateArrow(sheets, cellSel, GridNavDirection.UP, isRtl = true)
         assertEquals(CellKey("C:/docs/f1.xlsx", "و1", 1, 1), cellSel.activeCell)
+    }
+
+    @Test
+    fun testDesktopSettingsAndWorkspacesRenderWithoutLicensing() {
+        val lockDir = tempFolder.newFolder("lock_ui_dir")
+        val lockManager = DesktopAppLockManager(baseDir = lockDir)
+
+        ImageComposeScene(
+            width = 960,
+            height = 700,
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Rtl
+        ) {
+            ProvideDesktopTheme(isDark = false) {
+                DesktopSettingsScreen(
+                    appLockManager = lockManager,
+                    themeMode = "light",
+                    defaultSearchMethod = SearchMethod.CONTAINS,
+                    showAllRows = false,
+                    stretchSingleColumn = true,
+                    verticalCopyFormat = true,
+                    expandFullCellText = true,
+                    backgroundSyncEnabled = true,
+                    searchHistoryEnabled = true,
+                    searchHistoryCount = 0,
+                    onChangeTheme = {},
+                    onChangeDefaultMethod = {},
+                    onToggleShowAllRows = {},
+                    onToggleStretchSingleColumn = {},
+                    onToggleVerticalCopyFormat = {},
+                    onToggleExpandFullCellText = {},
+                    onToggleBackgroundSync = {},
+                    onToggleSearchHistory = {},
+                    onClearSearchHistory = {},
+                    onOpenAbout = {}
+                )
+            }
+        }.use { scene ->
+            scene.render(10_000_000L)
+        }
+
+        ImageComposeScene(
+            width = 960,
+            height = 600,
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Rtl
+        ) {
+            ProvideDesktopTheme(isDark = true) {
+                DesktopWorkspacesScreen(
+                    workspaces = listOf(Workspace(id = "ws1", name = "مجلد تجريبي", path = "C:/docs", addedAt = 1L)),
+                    activeWorkspaceId = null,
+                    indexProgress = IndexProgress(),
+                    filesCount = 12,
+                    segmentsCount = 340,
+                    statusBanner = null,
+                    onAddFolderClick = {},
+                    onDeleteWorkspace = {},
+                    onRefreshIndex = {},
+                    onCancelIndexing = {}
+                )
+            }
+        }.use { scene ->
+            scene.render(10_000_000L)
+        }
+    }
+
+    @Test
+    fun testDesktopLockScreenRendersWithLogo() {
+        val lockDir = tempFolder.newFolder("lock_screen_test_dir")
+        val lockManager = DesktopAppLockManager(baseDir = lockDir)
+
+        ImageComposeScene(
+            width = 960,
+            height = 700,
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Rtl
+        ) {
+            ProvideDesktopTheme(isDark = false) {
+                DesktopLockScreen(
+                    lockManager = lockManager,
+                    onUnlocked = {}
+                )
+            }
+        }.use { scene ->
+            scene.render(10_000_000L)
+        }
+
+        ImageComposeScene(
+            width = 960,
+            height = 700,
+            density = Density(1f),
+            layoutDirection = LayoutDirection.Rtl
+        ) {
+            ProvideDesktopTheme(isDark = true) {
+                DesktopLockScreen(
+                    lockManager = lockManager,
+                    onUnlocked = {}
+                )
+            }
+        }.use { scene ->
+            scene.render(10_000_000L)
+        }
     }
 }

@@ -193,7 +193,6 @@ fun DesktopSearchScreen(
     indexProgress: IndexProgress,
     filesCount: Int,
     segmentsCount: Int,
-    canExportExcel: Boolean,
     showAllRows: Boolean,
     stretchSingleColumn: Boolean,
     verticalCopyFormat: Boolean,
@@ -424,10 +423,6 @@ fun DesktopSearchScreen(
     }
 
     fun exportSelectionToExcel() {
-        if (!canExportExcel) {
-            statusMessage = "ميزة تصدير Excel غير مفعّلة في هذا الترخيص."
-            return
-        }
         if (!selectionState.isActive) return
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         val targetFile = DesktopSystemActions.pickSaveExcelFile("تحديد_بحث_آمن_$timestamp.xlsx") ?: return
@@ -449,10 +444,6 @@ fun DesktopSearchScreen(
     }
 
     fun exportResultsToExcel(resultsToExport: List<SearchResult>, prefix: String = "بحث_آمن") {
-        if (!canExportExcel) {
-            statusMessage = "ميزة تصدير Excel غير مفعّلة في هذا الترخيص."
-            return
-        }
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         val targetFile = DesktopSystemActions.pickSaveExcelFile("${prefix}_$timestamp.xlsx") ?: return
         val snapshot = resultsToExport.toList()
